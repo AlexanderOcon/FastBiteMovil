@@ -1,12 +1,5 @@
 import React, { useState } from 'react';
-import {
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import {Image,Pressable,ScrollView,StyleSheet,Text,View,} from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import Produtos from '../components/producto/Produtos';
 
@@ -25,7 +18,7 @@ const productos = [
     precio: '105',
     rating: '4.8',
     descripcion: 'Alitas doradas con salsa picante especial.',
-    imagen: 'https://images.unsplash.com/photo-1608039755401-742486ec6384?w=800',
+    imagen: 'https://olorahierbabuena.com/wp-content/uploads/2024/09/Alitas-de-pollo-al-horno-picantes.jpg',
   },
   {
     nombre: 'Classic Smash',

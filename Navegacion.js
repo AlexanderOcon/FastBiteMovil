@@ -2,6 +2,7 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
+
 import Catalogo from "./screens/Catalogo";
 import DetalleProducto from "./screens/DetalleProductos";
 import AcercaDe from "./screens/Carrito";
@@ -17,7 +18,7 @@ function CatalogoStack() {
       <Stack.Screen
         name="Catalogo"
         component={Catalogo}
-        options={{ title: "Catálogo" }}
+        options={{ title: "FastBiteMovile" }}
       />
       <Stack.Screen
         name="Detalle"
@@ -67,7 +68,7 @@ export default function Navegacion() {
           name="FavoritosTab"
           component={Favorito}
           options={{
-            title: "Perfil",
+            title: "Usuario",
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="person-outline" 
               size={size} 
