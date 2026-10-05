@@ -1,7 +1,10 @@
+import { useState } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
+import { CarritoContext } from "./context/CarritoContext";
+
 import Catalogo from "./screens/Catalogo";
 import DetalleProducto from "./screens/DetalleProductos";
 import AcercaDe from "./screens/Carrito";
@@ -17,7 +20,7 @@ function CatalogoStack() {
       <Stack.Screen
         name="Catalogo"
         component={Catalogo}
-        options={{ title: "Catálogo" }}
+        options={{ title: "FastBiteMovile" }}
       />
       <Stack.Screen
         name="Detalle"
@@ -29,13 +32,49 @@ function CatalogoStack() {
 }
 // NAVEGACIÓN PRINCIPAL
 export default function Navegacion() {
+  const [productosCarrito, setProductosCarrito] = useState([]);
+
+  const agregarAlCarrito = (producto, cantidad = 1) => {
+    const cantidadAgregar = Math.max(1, Number(cantidad) || 1);
+
+    setProductosCarrito((productosActuales) => {
+      const identificador = producto.id ?? producto.nombre;
+      const productoExistente = productosActuales.find(
+        (item) => (item.id ?? item.nombre) === identificador,
+      );
+
+      if (productoExistente) {
+        return productosActuales.map((item) =>
+          (item.id ?? item.nombre) === identificador
+            ? { ...item, cantidad: item.cantidad + cantidadAgregar }
+            : item,
+        );
+      }
+
+      return [...productosActuales, { ...producto, cantidad: cantidadAgregar }];
+    });
+  };
+
+  const quitarDelCarrito = (identificador) => {
+    setProductosCarrito((productosActuales) =>
+      productosActuales.filter(
+        (producto) => (producto.id ?? producto.nombre) !== identificador,
+      ),
+    );
+  };
+
+  const vaciarCarrito = () => setProductosCarrito([]);
+
   return (
-    <NavigationContainer>
-      <Tab.Navigator
-        screenOptions={{
-          headerShown: false,
-        }}
-      >
+    <CarritoContext.Provider
+      value={{ productosCarrito, agregarAlCarrito, quitarDelCarrito, vaciarCarrito }}
+    >
+      <NavigationContainer>
+        <Tab.Navigator
+          screenOptions={{
+            headerShown: false,
+          }}
+        >
         {/* TAB CATÁLOGO */}
         <Tab.Screen
           name="CatalogoTab"
@@ -67,7 +106,7 @@ export default function Navegacion() {
           name="FavoritosTab"
           component={Favorito}
           options={{
-            title: "Perfil",
+            title: "Usuario",
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="person-outline" 
               size={size} 
@@ -76,7 +115,8 @@ export default function Navegacion() {
             ),
           }}
         />
-      </Tab.Navigator>
-    </NavigationContainer>
+        </Tab.Navigator>
+      </NavigationContainer>
+    </CarritoContext.Provider>
   );
 }
