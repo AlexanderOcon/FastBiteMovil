@@ -1,8 +1,21 @@
-import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useContext, useState } from 'react';
+import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { CarritoContext } from '../context/CarritoContext';
 
 export default function DetalleProductos({ route }) {
   const { nombre, precio, categoria, imagen, descripcion, rating } = route.params;
+  const { agregarAlCarrito } = useContext(CarritoContext);
+  const [cantidad, setCantidad] = useState(1);
+  const subtotal = (Number(precio) || 0) * cantidad;
+
+  const manejarAgregarAlCarrito = () => {
+    agregarAlCarrito(route.params, cantidad);
+    Alert.alert(
+      'Agregado al carrito',
+      `${cantidad} ${cantidad === 1 ? 'unidad' : 'unidades'} de ${nombre} se agregaron correctamente.`,
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -20,8 +33,37 @@ export default function DetalleProductos({ route }) {
         <Text style={styles.titulo}>Descripción</Text>
         <Text style={styles.descripcion}>{descripcion}</Text>
 
-        <Pressable style={styles.boton}>
-          <Text style={styles.botonTexto}>Agregar al pedido</Text>
+        <View style={styles.cantidadFila}>
+          <Text style={styles.cantidadTitulo}>Cantidad</Text>
+          <View style={styles.selectorCantidad}>
+            <Pressable
+              style={[styles.controlCantidad, cantidad === 1 && styles.controlDeshabilitado]}
+              onPress={() => setCantidad((actual) => Math.max(1, actual - 1))}
+              disabled={cantidad === 1}
+              accessibilityRole="button"
+              accessibilityLabel="Reducir cantidad"
+            >
+              <Ionicons name="remove" size={20} color={cantidad === 1 ? '#aaa' : '#ed0016'} />
+            </Pressable>
+            <Text style={styles.cantidadValor}>{cantidad}</Text>
+            <Pressable
+              style={styles.controlCantidad}
+              onPress={() => setCantidad((actual) => actual + 1)}
+              accessibilityRole="button"
+              accessibilityLabel="Aumentar cantidad"
+            >
+              <Ionicons name="add" size={20} color="#ed0016" />
+            </Pressable>
+          </View>
+        </View>
+        <Text style={styles.subtotal}>Subtotal: C${subtotal}</Text>
+
+        <Pressable
+          style={styles.boton}
+          onPress={manejarAgregarAlCarrito}
+          accessibilityRole="button"
+        >
+          <Text style={styles.botonTexto}>Agregar al carrito</Text>
         </Pressable>
       </View>
     </View>
@@ -82,8 +124,48 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
   },
+  cantidadFila: {
+    marginTop: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cantidadTitulo: {
+    color: '#333',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  selectorCantidad: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  controlCantidad: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 18,
+    backgroundColor: '#fff1f2',
+  },
+  controlDeshabilitado: {
+    backgroundColor: '#f1f1f1',
+  },
+  cantidadValor: {
+    minWidth: 20,
+    color: '#29292e',
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  subtotal: {
+    marginTop: 12,
+    color: '#ed0016',
+    fontSize: 16,
+    fontWeight: '700',
+  },
   boton: {
-    marginTop: 35,
+    marginTop: 24,
     paddingVertical: 15,
     alignItems: 'center',
     borderRadius: 25,

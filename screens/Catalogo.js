@@ -1,103 +1,67 @@
-import React, { useState } from 'react';
-import {Image,Pressable,ScrollView,StyleSheet,Text,View,} from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {Image,Pressable,ScrollView,StyleSheet,Text,TextInput,View,} from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from "../firebase/config";
 import Produtos from '../components/producto/Produtos';
 
-const productos = [
-  {
-    nombre: 'Alitas BBQ',
-    categoria: 'Alitas',
-    precio: '99',
-    rating: '4.9',
-    descripcion: 'Alitas crujientes bañadas en salsa BBQ.',
-    imagen: 'https://images.unsplash.com/photo-1527477396000-e27163b481c2?w=800',
-  },
-  {
-    nombre: 'Alitas Picantes',
-    categoria: 'Alitas',
-    precio: '105',
-    rating: '4.8',
-    descripcion: 'Alitas doradas con salsa picante especial.',
-    imagen: 'https://olorahierbabuena.com/wp-content/uploads/2024/09/Alitas-de-pollo-al-horno-picantes.jpg',
-  },
-  {
-    nombre: 'Classic Smash',
-    categoria: 'Hamburgesas',
-    precio: '89',
-    rating: '4.8',
-    descripcion: 'Carne aplastada, queso cheddar y cebolla.',
-    imagen: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800',
-  },
-  {
-    nombre: 'BBQ Doble',
-    categoria: 'Hamburgesas',
-    precio: '115',
-    rating: '4.7',
-    descripcion: 'Doble carne, tocino crujiente y salsa BBQ.',
-    imagen: 'https://images.unsplash.com/photo-1550547660-d9450f859349?w=800',
-  },
-  {
-    nombre: 'Papas Clásicas',
-    categoria: 'Papas',
-    precio: '45',
-    rating: '4.6',
-    descripcion: 'Papas fritas crujientes con sal.',
-    imagen: 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=800',
-  },
-  {
-    nombre: 'Papas con Queso',
-    categoria: 'Papas',
-    precio: '65',
-    rating: '4.7',
-    descripcion: 'Papas crujientes con queso cheddar.',
-    imagen: 'https://images.unsplash.com/photo-1630384060421-cb20d0e0649d?w=800',
-  },
-  {
-    nombre: 'Refresco',
-    categoria: 'Bebidas',
-    precio: '35',
-    rating: '4.5',
-    descripcion: 'Refresco frío de tu sabor favorito.',
-    imagen: 'https://images.unsplash.com/photo-1544145945-f90425340c7e?w=800',
-  },
-  {
-    nombre: 'Limonada',
-    categoria: 'Bebidas',
-    precio: '40',
-    rating: '4.8',
-    descripcion: 'Limonada natural y refrescante.',
-    imagen: 'https://images.unsplash.com/photo-1523677011781-c91d1bbe2f9e?w=800',
-  },
-];
-
 export default function Catalogo({ navigation }) {
-  const [categoriaActiva, setCategoriaActiva] = useState('Alitas');
-
-  const producto1 = productos.find(
-    (producto) => producto.categoria === categoriaActiva,
-  );
-
-  const producto2 = productos.find(
-    (producto, indice) =>
-      producto.categoria === categoriaActiva &&
-      indice > productos.indexOf(producto1),
-  );
-
-  const renderProducto = (producto) => {
-    if (!producto) return null;
-
-    return (
-      <Produtos
-        nombre={producto.nombre}
-        categoria={producto.categoria}
-        precio={producto.precio}
-        rating={producto.rating}
-        descripcion={producto.descripcion}
-        imagen={producto.imagen}
-        onPress={() => navigation.navigate('Detalle', producto)}
-      />
-    );
+  
+  const [productos, setProductos] = useState([]);
+  const [categoriaActiva, setCategoriaActiva] = useState('Todos');
+  const [busqueda, setBusqueda] = useState('');
+  const categorias = [
+    'Todos',
+    ...new Set(productos.map((producto) => producto.categoria).filter(Boolean)),
+  ];
+  const iconosCategoria = {
+    Alitas: '🍗',
+    Hamburgesas: '🍔',
+    Papas: '🍟',
+    Bebidas: '🥤',
   };
+  const obtenerProductos = async () => {
+    try {
+      const consulta = await getDocs(collection(db, 'productos'));
+      const datos = [];
+
+      consulta.forEach((documento) => {
+        const producto = documento.data();
+        const nombreCategoria =
+          producto.categoria_id?.nombre || producto.categoria_id || producto.categoria || '';
+
+        datos.push({
+          id: documento.id,
+          ...producto,
+          categoria: String(nombreCategoria).trim(),
+          imagen: producto.image || producto.imagen || '',
+          descripcion:
+            producto.descripcion || producto.categoria_id?.descripcion || '',
+          rating: producto.rating || producto.calificacion || '5.0',
+        });
+      });
+
+      setProductos(datos);
+    } catch (error) {
+      console.error('Error obteniendo productos:', error);
+    }
+  };
+
+  useEffect(() => {
+    obtenerProductos();
+  }, []);
+
+  const productosFiltrados = productos.filter((producto) => {
+    const coincideCategoria =
+      categoriaActiva === 'Todos' || producto.categoria === categoriaActiva;
+    const textoProducto = `${producto.nombre || ''} ${producto.categoria || ''} ${producto.descripcion || ''}`;
+    const coincideBusqueda = textoProducto
+      .toLowerCase()
+      .includes(busqueda.trim().toLowerCase());
+
+    return coincideCategoria && coincideBusqueda;
+  });
 
   return (
     <View style={styles.container}>
@@ -114,56 +78,68 @@ export default function Catalogo({ navigation }) {
             </Pressable>
           </View>
 
-          <Image source={{ uri: productos[2].imagen }} style={styles.ofertaImagen} />
+          {productos[2]?.imagen ? (
+            <Image source={{ uri: productos[2].imagen }} style={styles.ofertaImagen} />
+          ) : null}
         </View>
 
         <View style={styles.contenido}>
+          <View style={styles.buscador}>
+            <Ionicons name="search-outline" size={18} color="#85858d" />
+            <TextInput
+              style={styles.input}
+              value={busqueda}
+              onChangeText={setBusqueda}
+              placeholder="Buscar producto"
+              placeholderTextColor="#999"
+              accessibilityLabel="Buscar productos"
+              returnKeyType="search"
+            />
+          </View>
+
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.categorias}
           >
-            <Pressable
-              style={[styles.categoria, categoriaActiva === 'Alitas' && styles.categoriaActiva]}
-              onPress={() => setCategoriaActiva('Alitas')}
-            >
-              <Text>🍗</Text>
-              <Text style={styles.textoCategoria}>Alitas</Text>
-            </Pressable>
-
-            <Pressable
-              style={[styles.categoria, categoriaActiva === 'Hamburgesas' && styles.categoriaActiva]}
-              onPress={() => setCategoriaActiva('Hamburgesas')}
-            >
-              <Text>🍔</Text>
-              <Text style={styles.textoCategoria}>Hamburgesas</Text>
-            </Pressable>
-
-            <Pressable
-              style={[styles.categoria, categoriaActiva === 'Papas' && styles.categoriaActiva]}
-              onPress={() => setCategoriaActiva('Papas')}
-            >
-              <Text>🍟</Text>
-              <Text style={styles.textoCategoria}>Papas</Text>
-            </Pressable>
-
-            <Pressable
-              style={[styles.categoria, categoriaActiva === 'Bebidas' && styles.categoriaActiva]}
-              onPress={() => setCategoriaActiva('Bebidas')}
-            >
-              <Text>🥤</Text>
-              <Text style={styles.textoCategoria}>Bebidas</Text>
-            </Pressable>
+            {categorias.map((categoria) => (
+              <Pressable
+                key={categoria}
+                style={[
+                  styles.categoria,
+                  categoriaActiva === categoria && styles.categoriaActiva,
+                ]}
+                onPress={() => setCategoriaActiva(categoria)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: categoriaActiva === categoria }}
+              >
+                <Text>{iconosCategoria[categoria] || '🍽️'}</Text>
+                <Text style={styles.textoCategoria}>{categoria}</Text>
+              </Pressable>
+            ))}
           </ScrollView>
 
           <Text style={styles.tituloSeccion}>
-            Productos de {categoriaActiva}
+            {categoriaActiva === 'Todos' ? 'Todos los productos' : `Productos de ${categoriaActiva}`}
           </Text>
 
           <View style={styles.productos}>
-            {renderProducto(producto1)}
-            {renderProducto(producto2)}
+            {productosFiltrados.map((producto) => (
+              <Produtos
+                key={producto.id}
+                nombre={producto.nombre}
+                categoria={producto.categoria}
+                precio={producto.precio}
+                rating={producto.rating}
+                descripcion={producto.descripcion}
+                imagen={producto.imagen}
+                onPress={() => navigation.navigate('Detalle', producto)}
+              />
+            ))}
           </View>
+          {productosFiltrados.length === 0 && (
+            <Text style={styles.sinResultados}>No se encontraron productos.</Text>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -171,7 +147,29 @@ export default function Catalogo({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f7f7f7' },
+  buscador: {
+    height: 46,
+    marginBottom: 14,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 10,
+    backgroundColor: '#f1f1f3',
+  },
+  input: { 
+    flex: 1, 
+    marginLeft: 8, 
+    color: '#29292e', 
+    fontSize: 14 
+  },
+  categorias: { 
+    gap: 8, 
+    paddingBottom: 15, 
+    paddingRight: 12 
+  },
+  container: { 
+    flex: 1, 
+    backgroundColor: '#f7f7f7' },
   oferta: {
     margin: 16,
     padding: 12,
@@ -181,7 +179,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: '#ff2639',
   },
-  ofertaLabel: { color: '#ffd9d9', fontSize: 9 },
+  ofertaLabel: { 
+    color: '#ffd9d9', 
+    fontSize: 9 },
   ofertaTitulo: {
     marginVertical: 4,
     color: '#fff',
@@ -195,10 +195,22 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#ffd000',
   },
-  ofertaBotonTexto: { color: '#715000', fontSize: 10, fontWeight: '700' },
-  ofertaImagen: { width: 78, height: 78, borderRadius: 10 },
-  contenido: { paddingHorizontal: 16 },
-  categorias: { gap: 8, paddingBottom: 15 },
+  ofertaBotonTexto: { 
+    color: '#715000', 
+    fontSize: 10, 
+    fontWeight: '700' },
+  ofertaImagen: { 
+    width: 78, 
+    height: 78, 
+    borderRadius: 10 
+  },
+  contenido: { 
+    paddingHorizontal: 16 
+  },
+  categorias: { 
+    gap: 8, 
+    paddingBottom: 15 
+  },
   categoria: {
     height: 36,
     paddingHorizontal: 16,
@@ -208,8 +220,12 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     backgroundColor: '#eeeef2',
   },
-  categoriaActiva: { backgroundColor: '#ffc400' },
-  textoCategoria: { color: '#85858d', fontSize: 12 },
+  categoriaActiva: { 
+    backgroundColor: '#ffc400' 
+  },
+  textoCategoria: { 
+    color: '#85858d', 
+    fontSize: 12 },
   tituloSeccion: {
     marginBottom: 10,
     color: '#45454d',
@@ -220,5 +236,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+  },
+  sinResultados: {
+    paddingVertical: 20,
+    color: '#777',
+    fontSize: 14,
+    textAlign: 'center',
   },
 });

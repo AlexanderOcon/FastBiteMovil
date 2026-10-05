@@ -1,14 +1,7 @@
 import React from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
-export default function Produtos({
-  imagen,
-  nombre,
-  descripcion,
-  precio,
-  rating,
-  onPress,
-}) {
+export default function Produtos({imagen,nombre,descripcion,precio,rating,onPress,}) {
   return (
     <Pressable style={styles.card} onPress={onPress}>
       <View>
