@@ -7,7 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 // Proporciona el icono de lupa para el buscador.
 import { Ionicons } from '@expo/vector-icons';
 // Importa las funciones necesarias para leer documentos de Firestore.
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 // Importa la instancia configurada de la base de datos.
 import { db } from "../firebase/config";
 // Importa el componente reutilizable que representa un producto.
@@ -33,46 +33,33 @@ export default function Catalogo({ navigation }) {
     Papas: '🍟',
     Bebidas: '🥤',
   };
-  // Descarga los productos y adapta sus campos al formato que usa la interfaz.
-  const obtenerProductos = async () => {
-    // Captura errores para que un problema de Firebase no cierre la pantalla.
-    try {
-      // Lee todos los documentos de la colección "productos".
-      const consulta = await getDocs(collection(db, 'productos'));
-      // Crea la lista que se llenará con cada documento.
-      const datos = [];
+  // Adapta los documentos de Firestore al formato que usa la interfaz.
+  const adaptarProductos = (consulta) => {
+    const datos = consulta.docs.map((documento) => {
+      const producto = documento.data();
+      const nombreCategoria =
+        producto.categoria_id?.nombre || producto.categoria_id || producto.categoria || '';
 
-      // Recorre todos los documentos devueltos por Firestore.
-      consulta.forEach((documento) => {
-        // Extrae los campos almacenados en el documento actual.
-        const producto = documento.data();
-        // Lee el nombre de categoría embebido o usa otros formatos disponibles.
-        const nombreCategoria =
-          producto.categoria_id?.nombre || producto.categoria_id || producto.categoria || '';
-
-  // Añade el id y normaliza los campos que utiliza el catálogo.
-        datos.push({
-          id: documento.id,
-          ...producto,
-          categoria: String(nombreCategoria).trim(),
-          imagen: producto.image || producto.imagen || '',
-          descripcion:
-            producto.descripcion || producto.categoria_id?.descripcion || '',
-          rating: producto.rating || producto.calificacion || '5.0',
-        });
-      });
-
-      // Guarda la lista completa para actualizar la interfaz.
-      setProductos(datos);
-    } catch (error) {
-      // Imprime el error para facilitar su diagnóstico.
-      console.error('Error obteniendo productos:', error);
-    }
+      return {
+        id: documento.id,
+        ...producto,
+        categoria: String(nombreCategoria).trim(),
+        imagen: producto.image || producto.imagen || '',
+        descripcion:
+          producto.descripcion || producto.categoria_id?.descripcion || '',
+        rating: producto.rating || producto.calificacion || '5.0',
+      };
+    });
+    setProductos(datos);
   };
 
-  // Solicita los productos una vez cuando se monta esta pantalla.
+  // Mantiene el catálogo actualizado cuando se agregan o cambian productos.
   useEffect(() => {
-    obtenerProductos();
+    return onSnapshot(
+      collection(db, 'productos'),
+      adaptarProductos,
+      (error) => console.error('Error obteniendo productos:', error),
+    );
   }, []);
 
   // Calcula qué productos coinciden con la categoría y con la búsqueda.

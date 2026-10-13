@@ -1,155 +1,253 @@
-// Importa useState para guardar y actualizar productos en el carrito.
-import { useState } from "react";
-// Proporciona el contenedor requerido por React Navigation.
-import { NavigationContainer } from "@react-navigation/native";
-// Crea la navegación inferior por pestañas.
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-// Crea la navegación apilada para abrir el detalle desde el catálogo.
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
-// Proporciona los iconos que se muestran en las pestañas.
-import { Ionicons } from "@expo/vector-icons";
-// Comparte el contenido y las funciones del carrito con todas las pantallas.
-import { CarritoContext } from "./context/CarritoContext";
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { NavigationContainer } from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { signOut } from 'firebase/auth';
+import { CarritoContext } from './context/CarritoContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { auth, db } from './firebase/config';
+import Catalogo from './screens/Catalogo';
+import DetalleProducto from './screens/DetalleProductos';
+import Carrito from './screens/Carrito';
+import Perfil from './screens/Perfil';
+import AdminProductos from './screens/AdminProductos';
 
-// Importa la pantalla que lista productos.
-import Catalogo from "./screens/Catalogo";
-// Importa la pantalla de información de un producto.
-import DetalleProducto from "./screens/DetalleProductos";
-// Importa la pantalla donde se revisa y confirma el carrito.
-import AcercaDe from "./screens/Carrito";
-// Importa la pantalla de perfil del usuario.
-import Favorito from "./screens/Perfil";
-
-// Crea el objeto de configuración de las pestañas inferiores.
 const Tab = createBottomTabNavigator();
-// Crea el objeto de configuración para la pila catálogo-detalle.
 const Stack = createNativeStackNavigator();
+const GUEST_CART_KEY = 'fastbite:cart:guest';
+const userCartKey = (uid) => `fastbite:cart:user:${uid}`;
 
-// Define las pantallas que pertenecen al flujo del catálogo.
-function CatalogoStack() {
-  // Devuelve una pila navegable con el catálogo y el detalle.
+function readItems(value) {
+  if (Array.isArray(value)) return value;
+  return Array.isArray(value?.items) ? value.items : [];
+}
+
+function mergeCarts(first, second, keepHighestQuantity = false) {
+  const merged = new Map();
+  first.forEach((item) => merged.set(item.id ?? item.nombre, { ...item }));
+  second.forEach((item) => {
+    const key = item.id ?? item.nombre;
+    const existing = merged.get(key);
+    if (!existing) {
+      merged.set(key, { ...item });
+      return;
+    }
+    merged.set(key, {
+      ...existing,
+      ...item,
+      cantidad: keepHighestQuantity
+        ? Math.max(Number(existing.cantidad) || 1, Number(item.cantidad) || 1)
+        : (Number(existing.cantidad) || 1) + (Number(item.cantidad) || 1),
+    });
+  });
+  return [...merged.values()];
+}
+
+function MainNavigation() {
+  const { user, role, authReady, roleReady } = useAuth();
+  const [productosCarrito, setProductosCarrito] = useState([]);
+  const [carritoListo, setCarritoListo] = useState(false);
+  const ownerCarritoInvitado = useRef(null);
+
+  useEffect(() => {
+    if (!authReady) return undefined;
+    let cancelled = false;
+    setCarritoListo(false);
+
+    const cargarCarrito = async () => {
+      try {
+        const guestRaw = await AsyncStorage.getItem(GUEST_CART_KEY);
+        const guest = guestRaw ? JSON.parse(guestRaw) : null;
+        if (!user) {
+          ownerCarritoInvitado.current = guest?.ownerUid ?? null;
+          if (!cancelled) setProductosCarrito(readItems(guest));
+          return;
+        }
+
+        const localRaw = await AsyncStorage.getItem(userCartKey(user.uid));
+        const local = localRaw ? JSON.parse(localRaw) : null;
+        let remoteItems = null;
+        try {
+          const remote = await getDoc(doc(db, 'usuarios', user.uid, 'carrito', 'actual'));
+          if (remote.exists()) remoteItems = readItems(remote.data());
+        } catch (error) {
+          console.error('No se pudo sincronizar el carrito con Firestore:', error);
+          Alert.alert(
+            'Carrito sin sincronizar',
+            'Se conservaron los productos guardados en este dispositivo. Verifica los permisos de Firestore.',
+          );
+        }
+
+        const accountItems = remoteItems ?? readItems(local);
+        const guestItems = readItems(guest);
+        const guestBelongsToAccount = !guest?.ownerUid || guest.ownerUid === user.uid;
+        const merged = guestBelongsToAccount
+          ? mergeCarts(accountItems, guestItems, guest?.ownerUid === user.uid)
+          : accountItems;
+
+        ownerCarritoInvitado.current = user.uid;
+        if (!cancelled) setProductosCarrito(merged);
+        if (guestBelongsToAccount && guestItems.length > 0) {
+          await AsyncStorage.removeItem(GUEST_CART_KEY);
+        }
+      } catch (error) {
+        console.error('No se pudo cargar el carrito guardado:', error);
+        Alert.alert('No se pudo cargar el carrito', 'Cierra y vuelve a abrir la aplicación para intentarlo de nuevo.');
+        if (!cancelled) setProductosCarrito([]);
+      } finally {
+        if (!cancelled) setCarritoListo(true);
+      }
+    };
+
+    cargarCarrito();
+    return () => { cancelled = true; };
+  }, [authReady, user?.uid]);
+
+  useEffect(() => {
+    if (!carritoListo) return;
+    const guardarCarrito = async () => {
+      if (user) {
+        const local = AsyncStorage.setItem(userCartKey(user.uid), JSON.stringify({ items: productosCarrito }));
+        const remote = setDoc(
+          doc(db, 'usuarios', user.uid, 'carrito', 'actual'),
+          { items: productosCarrito, updatedAt: serverTimestamp() },
+          { merge: true },
+        );
+        const results = await Promise.allSettled([local, remote]);
+        const remoteResult = results[1];
+        if (remoteResult.status === 'rejected') {
+          console.error('No se pudo sincronizar el carrito con Firestore:', remoteResult.reason);
+          Alert.alert(
+            'Carrito guardado solo en este dispositivo',
+            'No se pudo sincronizar con tu cuenta. Verifica las reglas de Firestore.',
+          );
+        }
+        if (results[0].status === 'rejected') {
+          console.error('No se pudo guardar el carrito en el dispositivo:', results[0].reason);
+          Alert.alert('No se pudo guardar el carrito', 'Revisa el almacenamiento disponible en tu dispositivo.');
+        }
+      } else {
+        await AsyncStorage.setItem(GUEST_CART_KEY, JSON.stringify({
+          ownerUid: ownerCarritoInvitado.current,
+          items: productosCarrito,
+        }));
+      }
+    };
+
+    guardarCarrito().catch((error) => console.error('Error guardando el carrito local:', error));
+  }, [carritoListo, productosCarrito, user?.uid]);
+
+  const agregarAlCarrito = (producto, cantidad = 1) => {
+    const cantidadAgregar = Math.max(1, Number(cantidad) || 1);
+    setProductosCarrito((actuales) => {
+      const id = producto.id ?? producto.nombre;
+      const existente = actuales.find((item) => (item.id ?? item.nombre) === id);
+      return existente
+        ? actuales.map((item) => (item.id ?? item.nombre) === id
+          ? { ...item, cantidad: (Number(item.cantidad) || 1) + cantidadAgregar }
+          : item)
+        : [...actuales, { ...producto, cantidad: cantidadAgregar }];
+    });
+  };
+
+  const quitarDelCarrito = (id) => {
+    setProductosCarrito((actuales) => actuales.filter((item) => (item.id ?? item.nombre) !== id));
+  };
+
+  const cerrarSesion = async () => {
+    try {
+      if (user) {
+        await AsyncStorage.setItem(GUEST_CART_KEY, JSON.stringify({
+          ownerUid: user.uid,
+          items: productosCarrito,
+        }));
+      }
+      await signOut(auth);
+    } catch (error) {
+      console.error('Error cerrando sesión:', error);
+      Alert.alert('No se pudo cerrar sesión', 'Inténtalo de nuevo.');
+    }
+  };
+
+  if (!authReady || !roleReady || !carritoListo) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color="#ed0016" />
+      </View>
+    );
+  }
+
   return (
-    // Declara el navegador apilado que permite avanzar y volver entre pantallas.
+    <CarritoContext.Provider value={{
+      productosCarrito,
+      agregarAlCarrito,
+      quitarDelCarrito,
+      vaciarCarrito: () => setProductosCarrito([]),
+      cerrarSesion,
+    }}>
+      {!user ? (
+        <Perfil />
+      ) : (
+        <NavigationContainer>
+          {role === 'admin' ? (
+            <Stack.Navigator>
+              <Stack.Screen
+                name="AdminProductos"
+                component={AdminProductos}
+                options={{ title: 'Administración', headerShown: false }}
+              />
+            </Stack.Navigator>
+          ) : (
+            <Tab.Navigator screenOptions={{ headerShown: false }}>
+              <Tab.Screen
+                name="CatalogoTab"
+                component={CatalogoStack}
+                options={{
+                  title: 'Catálogo',
+                  tabBarIcon: ({ color, size }) => <Ionicons name="albums-outline" size={size} color={color} />,
+                }}
+              />
+              <Tab.Screen
+                name="CarritoTab"
+                component={Carrito}
+                options={{
+                  title: 'Carrito',
+                  tabBarIcon: ({ color, size }) => <Ionicons name="cart-outline" size={size} color={color} />,
+                }}
+              />
+              <Tab.Screen
+                name="PerfilTab"
+                component={Perfil}
+                options={{
+                  title: 'Cuenta',
+                  tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />,
+                }}
+              />
+            </Tab.Navigator>
+          )}
+        </NavigationContainer>
+      )}
+    </CarritoContext.Provider>
+  );
+}
+
+function CatalogoStack() {
+  return (
     <Stack.Navigator>
-      {/* Registra la pantalla principal del catálogo y su título de encabezado. */}
-      <Stack.Screen
-        name="Catalogo"
-        component={Catalogo}
-        options={{ title: "FastBiteMovile" }}
-      />
-      {/* Registra el detalle, que recibe por route.params el producto seleccionado. */}
-      <Stack.Screen
-        name="Detalle"
-        component={DetalleProducto}
-        options={{ title: "Detalle del producto" }}
-      />
+      <Stack.Screen name="Catalogo" component={Catalogo} options={{ title: 'FastBite' }} />
+      <Stack.Screen name="Detalle" component={DetalleProducto} options={{ title: 'Detalle del producto' }} />
     </Stack.Navigator>
   );
 }
 
-// Define la navegación principal y el estado compartido de la aplicación.
 export default function Navegacion() {
-  // Guarda una lista de productos agregados al carrito; inicia vacía.
-  const [productosCarrito, setProductosCarrito] = useState([]);
-
-  // Agrega un producto al carrito o aumenta su cantidad si ya existe.
-  const agregarAlCarrito = (producto, cantidad = 1) => {
-    // Convierte la cantidad recibida en número y evita cantidades menores que uno.
-    const cantidadAgregar = Math.max(1, Number(cantidad) || 1);
-
-    // Actualiza el estado usando su valor más reciente.
-    setProductosCarrito((productosActuales) => {
-      // Usa el id del documento; si no existe, usa el nombre como identificador.
-      const identificador = producto.id ?? producto.nombre;
-      // Busca si ese producto ya aparece en la lista actual.
-      const productoExistente = productosActuales.find(
-        // Compara el identificador de cada producto con el que se quiere agregar.
-        (item) => (item.id ?? item.nombre) === identificador,
-      );
-
-      // Si el producto ya estaba en el carrito, actualiza su cantidad.
-      if (productoExistente) {
-        // Devuelve una nueva lista para que React detecte el cambio de estado.
-        return productosActuales.map((item) =>
-          // Suma la nueva cantidad solo al producto seleccionado.
-          (item.id ?? item.nombre) === identificador
-            ? { ...item, cantidad: item.cantidad + cantidadAgregar }
-            // Conserva sin cambios los demás productos.
-            : item,
-        );
-      }
-
-      // Si aún no existe, crea una nueva lista con el producto y su cantidad.
-      return [...productosActuales, { ...producto, cantidad: cantidadAgregar }];
-    });
-  };
-
-  // Elimina del carrito la línea cuyo id o nombre coincide con el recibido.
-  const quitarDelCarrito = (identificador) => {
-    // Conserva solo los productos distintos al que se desea quitar.
-    setProductosCarrito((productosActuales) =>
-      productosActuales.filter(
-        // Compara el id y usa el nombre como alternativa si no hay id.
-        (producto) => (producto.id ?? producto.nombre) !== identificador,
-      ),
-    );
-  };
-
-  // Vacía el carrito asignándole una lista sin productos.
-  const vaciarCarrito = () => setProductosCarrito([]);
-
-  // Renderiza la aplicación y pone las funciones del carrito a disposición de sus pantallas.
   return (
-    // Provider comparte productos y acciones sin pasarlas manualmente por cada componente.
-    <CarritoContext.Provider
-      value={{ productosCarrito, agregarAlCarrito, quitarDelCarrito, vaciarCarrito }}
-    >
-      {/* Contenedor que habilita el sistema completo de navegación. */}
-      <NavigationContainer>
-        {/* Define las pestañas principales y oculta encabezados duplicados. */}
-        <Tab.Navigator
-          screenOptions={{
-            headerShown: false,
-          }}
-        >
-          {/* Pestaña del catálogo; contiene su propia pila de catálogo y detalle. */}
-          <Tab.Screen
-            name="CatalogoTab"
-            component={CatalogoStack}
-            options={{
-              title: "Catálogo",
-              tabBarIcon: ({ color, size }) => (
-                // Dibuja el icono del catálogo con el color y tamaño dados por la pestaña.
-                <Ionicons name="albums-outline" size={size} color={color} />
-              ),
-            }}
-          />
-          {/* Pestaña que muestra los productos agregados y permite realizar el pedido. */}
-          <Tab.Screen
-            name="AcercaDeTab"
-            component={AcercaDe}
-            options={{
-              title: "Carrito",
-              tabBarIcon: ({ color, size }) => (
-                // Dibuja el icono del carrito con el color y tamaño dados por la pestaña.
-                <Ionicons name="cart-outline" size={size} color={color} />
-              ),
-            }}
-          />
-          {/* Pestaña que abre la pantalla de perfil del usuario. */}
-          <Tab.Screen
-            name="FavoritosTab"
-            component={Favorito}
-            options={{
-              title: "Usuario",
-              tabBarIcon: ({ color, size }) => (
-                // Dibuja el icono del usuario con el color y tamaño dados por la pestaña.
-                <Ionicons name="person-outline" size={size} color={color} />
-              ),
-            }}
-          />
-        </Tab.Navigator>
-      </NavigationContainer>
-    </CarritoContext.Provider>
+    <AuthProvider>
+      <MainNavigation />
+    </AuthProvider>
   );
 }

@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "FastBiteMovil",
-    "slug": "FastBiteMovil",
+    "slug": "fastbitemovil",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -16,13 +16,13 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "package": "com.anonymous.FastBiteMovil"
+      "package": "com.fastbitemovil"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-status-bar"
+      "expo-font"
     ]
   }
 }

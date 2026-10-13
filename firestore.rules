@@ -1,0 +1,51 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
+        && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /productos/{productId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /usuarios/{userId} {
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasAll(['username', 'email', 'telefono', 'role'])
+        && request.resource.data.keys().hasOnly(['username', 'email', 'telefono', 'role'])
+        && request.resource.data.role == 'user'
+        && request.resource.data.username is string
+        && request.resource.data.email is string
+        && request.resource.data.telefono is string;
+      allow list, update, delete: if false;
+
+      match /carrito/{cartId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /direcciones/{addressId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    match /pedido/{orderId} {
+      allow create: if signedIn() && request.resource.data.usuarioId == request.auth.uid;
+      allow read: if signedIn()
+        && (resource.data.usuarioId == request.auth.uid || isAdmin());
+      allow update, delete: if isAdmin();
+    }
+  }
+}

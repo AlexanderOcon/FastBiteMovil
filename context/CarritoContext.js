@@ -5,4 +5,5 @@ export const CarritoContext = createContext({
   agregarAlCarrito: () => {},
   quitarDelCarrito: () => {},
   vaciarCarrito: () => {},
+  cerrarSesion: async () => {},
 });
