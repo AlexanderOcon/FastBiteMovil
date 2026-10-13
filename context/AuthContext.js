@@ -27,9 +27,19 @@ export function AuthProvider({ children }) {
       }
 
       try {
+        // Lee el documento del usuario en Firestore para validar si tiene el rol de administrador.
         const profile = await getDoc(doc(db, 'usuarios', nextUser.uid));
         if (activeUserId !== nextUser.uid) return;
-        setRole(profile.exists() && profile.data().role === 'admin' ? 'admin' : 'user');
+
+        // Se considera administrador también al correo interno del usuario admin, aunque el documento
+        // del perfil aún no haya sido creado o no incluya la propiedad role.
+        const projectId = process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID;
+        const adminEmail = projectId ? `admin@${projectId}.firebaseapp.com` : null;
+        const isAdminAccount = !!adminEmail && nextUser.email?.toLowerCase() === adminEmail.toLowerCase();
+        const isAdminRole = profile.exists() && profile.data().role === 'admin';
+
+        // Si cualquiera de estas condiciones es verdadera, la app redirige a Administración.
+        setRole(isAdminRole || isAdminAccount ? 'admin' : 'user');
       } catch (error) {
         if (activeUserId !== nextUser.uid) return;
         console.error('No se pudo comprobar el rol del usuario:', error);

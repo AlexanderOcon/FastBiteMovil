@@ -8,9 +8,24 @@ import { Ionicons } from '@expo/vector-icons';
 import { CarritoContext } from '../context/CarritoContext';
 
 // Muestra la información y las acciones del producto seleccionado.
+// Convierte cualquier valor anidado en texto limpio para que React pueda renderizarlo sin errores.
+function normalizarTextoDetalle(valor) {
+  if (typeof valor === 'string') return valor;
+  if (typeof valor === 'number' || typeof valor === 'boolean') return String(valor);
+  if (Array.isArray(valor)) return valor.join(', ');
+  if (valor && typeof valor === 'object') {
+    return normalizarTextoDetalle(valor.nombre || valor.descripcion || valor.titulo || valor.label || '');
+  }
+  return '';
+}
+
 export default function DetalleProductos({ route }) {
-  // Extrae del parámetro de navegación los datos enviados desde el catálogo.
+  // Extrae del parámetro de navegación los datos enviados desde el catálogo y los normaliza.
   const { nombre, precio, categoria, imagen, descripcion, rating } = route.params;
+  const nombreTexto = normalizarTextoDetalle(nombre);
+  const categoriaTexto = normalizarTextoDetalle(categoria);
+  const descripcionTexto = normalizarTextoDetalle(descripcion);
+  const ratingTexto = normalizarTextoDetalle(rating ?? '5.0');
   // Obtiene del contexto la función que agrega productos al carrito.
   const { agregarAlCarrito } = useContext(CarritoContext);
   // Guarda la cantidad elegida; cada producto comienza con una unidad.
@@ -25,7 +40,7 @@ export default function DetalleProductos({ route }) {
     // Confirma visualmente las unidades que se añadieron.
     Alert.alert(
       'Agregado al carrito',
-      `${cantidad} ${cantidad === 1 ? 'unidad' : 'unidades'} de ${nombre} se agregaron correctamente.`,
+      `${cantidad} ${cantidad === 1 ? 'unidad' : 'unidades'} de ${nombreTexto} se agregaron correctamente.`,
     );
   };
 
@@ -39,19 +54,19 @@ export default function DetalleProductos({ route }) {
       {/* Agrupa los datos del producto y sus acciones. */}
       <View style={styles.contenido}>
         {/* Muestra la categoría del producto. */}
-        <Text style={styles.categoria}>{categoria}</Text>
+        <Text style={styles.categoria}>{categoriaTexto}</Text>
         {/* Muestra el nombre del producto. */}
-        <Text style={styles.nombre}>{nombre}</Text>
+        <Text style={styles.nombre}>{nombreTexto}</Text>
 
         {/* Coloca el precio y la calificación en la misma fila. */}
         <View style={styles.fila}>
           <Text style={styles.precio}>C${precio}</Text>
-          <Text style={styles.rating}>★ {rating}</Text>
+          <Text style={styles.rating}>★ {ratingTexto}</Text>
         </View>
 
         {/* Presenta el encabezado y el texto descriptivo del producto. */}
         <Text style={styles.titulo}>Descripción</Text>
-        <Text style={styles.descripcion}>{descripcion}</Text>
+        <Text style={styles.descripcion}>{descripcionTexto}</Text>
 
         {/* Agrupa la etiqueta y los controles para elegir unidades. */}
         <View style={styles.cantidadFila}>

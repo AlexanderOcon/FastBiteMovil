@@ -5,6 +5,9 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 // Representa un producto; las props contienen sus datos y su acción al pulsarlo.
 export default function Produtos({imagen,nombre,descripcion,precio,rating,onPress,}) {
+  // Garantiza que la descripción sea un string antes de mostrarla en el texto del producto.
+  const descripcionTexto = typeof descripcion === 'string' ? descripcion : '';
+
   // Devuelve toda la tarjeta como un área táctil.
   return (
     // Ejecuta la función recibida cuando el usuario pulsa la tarjeta.
@@ -32,7 +35,7 @@ export default function Produtos({imagen,nombre,descripcion,precio,rating,onPres
 
   {/* Limita la descripción a dos líneas para evitar tarjetas desiguales. */}
         <Text style={styles.descripcion} numberOfLines={2}>
-          {descripcion}
+          {descripcionTexto}
         </Text>
 
         {/* Agrupa el precio en la parte inferior de la tarjeta. */}

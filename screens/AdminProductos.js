@@ -14,6 +14,7 @@ import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { CarritoContext } from '../context/CarritoContext';
 
+// Define el estado inicial del formulario para agregar o editar un producto.
 const formularioVacio = {
   nombre: '',
   categoria: '',
@@ -22,6 +23,17 @@ const formularioVacio = {
   descripcion: '',
   rating: '5.0',
 };
+
+// Convierte un valor que venga como objeto, arreglo o número a un texto seguro para mostrarse en pantalla.
+function textoSeguro(valor) {
+  if (typeof valor === 'string') return valor;
+  if (typeof valor === 'number' || typeof valor === 'boolean') return String(valor);
+  if (Array.isArray(valor)) return valor.map((item) => textoSeguro(item)).filter(Boolean).join(', ');
+  if (valor && typeof valor === 'object') {
+    return textoSeguro(valor.nombre || valor.descripcion || valor.titulo || valor.label || '');
+  }
+  return '';
+}
 
 export default function AdminProductos() {
   const { user } = useAuth();
@@ -40,15 +52,18 @@ export default function AdminProductos() {
     },
   ), []);
 
+  // Actualiza un campo del formulario en tiempo real mientras el administrador escribe.
   const actualizarCampo = (campo, valor) => {
     setFormulario((actual) => ({ ...actual, [campo]: valor }));
   };
 
+  // Reinicia el formulario cuando se cancela una edición o se guarda un producto nuevo.
   const limpiarFormulario = () => {
     setIdEditando(null);
     setFormulario(formularioVacio);
   };
 
+  // Guarda un producto nuevo o actualiza el actual en Firestore.
   const guardarProducto = async () => {
     const precio = Number(formulario.precio);
     if (!formulario.nombre.trim() || !formulario.categoria.trim() || !formulario.imagen.trim()
@@ -82,18 +97,20 @@ export default function AdminProductos() {
     }
   };
 
+  // Carga un producto ya existente para editarlo en el formulario.
   const cargarParaEditar = (producto) => {
     setIdEditando(producto.id);
     setFormulario({
-      nombre: producto.nombre || '',
-      categoria: producto.categoria || producto.categoria_id?.nombre || producto.categoria_id || '',
+      nombre: textoSeguro(producto.nombre || ''),
+      categoria: textoSeguro(producto.categoria || producto.categoria_id?.nombre || producto.categoria_id || ''),
       precio: String(producto.precio ?? ''),
-      imagen: producto.imagen || producto.image || '',
-      descripcion: producto.descripcion || '',
+      imagen: textoSeguro(producto.imagen || producto.image || ''),
+      descripcion: textoSeguro(producto.descripcion || ''),
       rating: String(producto.rating || producto.calificacion || '5.0'),
     });
   };
 
+  // Pide confirmación antes de eliminar un producto de la base de datos.
   const confirmarEliminacion = (producto) => {
     Alert.alert('Eliminar producto', `¿Quieres eliminar ${producto.nombre}?`, [
       { text: 'Cancelar', style: 'cancel' },
@@ -143,16 +160,22 @@ export default function AdminProductos() {
       )}
 
       <Text style={styles.subtitulo}>Productos actuales ({productos.length})</Text>
-      {productos.map((producto) => (
-        <View key={producto.id} style={styles.producto}>
-          <View style={styles.detalle}>
-            <Text style={styles.nombre}>{producto.nombre}</Text>
-            <Text style={styles.secundario}>{producto.categoria || producto.categoria_id} · C${producto.precio}</Text>
+      {productos.map((producto) => {
+        const nombre = textoSeguro(producto.nombre || '');
+        const categoria = textoSeguro(producto.categoria || producto.categoria_id || '');
+        const precio = textoSeguro(producto.precio ?? '');
+
+        return (
+          <View key={producto.id} style={styles.producto}>
+            <View style={styles.detalle}>
+              <Text style={styles.nombre}>{nombre}</Text>
+              <Text style={styles.secundario}>{categoria ? `${categoria} · C$${precio}` : `C$${precio}`}</Text>
+            </View>
+            <Pressable onPress={() => cargarParaEditar(producto)}><Text style={styles.enlace}>Editar</Text></Pressable>
+            <Pressable onPress={() => confirmarEliminacion(producto)}><Text style={styles.eliminar}>Borrar</Text></Pressable>
           </View>
-          <Pressable onPress={() => cargarParaEditar(producto)}><Text style={styles.enlace}>Editar</Text></Pressable>
-          <Pressable onPress={() => confirmarEliminacion(producto)}><Text style={styles.eliminar}>Borrar</Text></Pressable>
-        </View>
-      ))}
+        );
+      })}
     </ScrollView>
   );
 }

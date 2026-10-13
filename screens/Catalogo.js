@@ -14,6 +14,17 @@ import { db } from "../firebase/config";
 import Produtos from '../components/Produtos';
 
 // Muestra productos y permite filtrarlos; navigation abre su pantalla de detalle.
+// Convierte cualquier valor recibido desde Firestore en texto seguro para renderizarlo en el catálogo.
+function normalizarTexto(valor) {
+  if (typeof valor === 'string') return valor;
+  if (typeof valor === 'number' || typeof valor === 'boolean') return String(valor);
+  if (Array.isArray(valor)) return valor.join(', ');
+  if (valor && typeof valor === 'object') {
+    return normalizarTexto(valor.nombre || valor.descripcion || valor.titulo || valor.label || '');
+  }
+  return '';
+}
+
 export default function Catalogo({ navigation }) {
   // Guarda los documentos de productos descargados desde Firestore.
   const [productos, setProductos] = useState([]);
@@ -35,19 +46,19 @@ export default function Catalogo({ navigation }) {
   };
   // Adapta los documentos de Firestore al formato que usa la interfaz.
   const adaptarProductos = (consulta) => {
+    // Ajusta cada producto para que tenga siempre valores de texto en los campos que se van a mostrar.
     const datos = consulta.docs.map((documento) => {
       const producto = documento.data();
       const nombreCategoria =
-        producto.categoria_id?.nombre || producto.categoria_id || producto.categoria || '';
+        normalizarTexto(producto.categoria_id?.nombre || producto.categoria_id || producto.categoria || '');
 
       return {
         id: documento.id,
         ...producto,
-        categoria: String(nombreCategoria).trim(),
-        imagen: producto.image || producto.imagen || '',
-        descripcion:
-          producto.descripcion || producto.categoria_id?.descripcion || '',
-        rating: producto.rating || producto.calificacion || '5.0',
+        categoria: nombreCategoria.trim(),
+        imagen: normalizarTexto(producto.image || producto.imagen || ''),
+        descripcion: normalizarTexto(producto.descripcion || producto.categoria_id?.descripcion || ''),
+        rating: normalizarTexto(producto.rating || producto.calificacion || '5.0'),
       };
     });
     setProductos(datos);

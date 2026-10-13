@@ -28,10 +28,50 @@ import { auth, db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { CarritoContext } from '../context/CarritoContext';
 
+// Genera el correo interno que Firebase usa para autenticar a un usuario con nombre de usuario.
 function emailInternoDeUsuario(nombreUsuario) {
   const projectId = process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID;
   if (!projectId) throw new Error('Falta EXPO_PUBLIC_FIREBASE_PROJECT_ID en .env.');
   return `${nombreUsuario}@${projectId}.firebaseapp.com`;
+}
+
+// Credenciales del usuario administrador que debe entrar directo a la administración.
+const ADMIN_USERNAME = 'admin';
+const ADMIN_PASSWORD = 'grupo4';
+
+// Inicia sesión como admin o crea la cuenta admin si todavía no existe en Firebase Auth.
+async function iniciarSesionAdmin() {
+  const emailAdmin = emailInternoDeUsuario(ADMIN_USERNAME);
+
+  try {
+    // Si el usuario admin ya existe, solo realiza el login.
+    await signInWithEmailAndPassword(auth, emailAdmin, ADMIN_PASSWORD);
+  } catch (error) {
+    // Si la cuenta aún no existe, la crea con el rol de administrador.
+    if (error?.code !== 'auth/user-not-found') {
+      throw error;
+    }
+
+    const credential = await createUserWithEmailAndPassword(auth, emailAdmin, ADMIN_PASSWORD);
+    await updateProfile(credential.user, { displayName: 'Admin' });
+    await setDoc(doc(db, 'usuarios', credential.user.uid), {
+      username: 'Admin',
+      email: emailAdmin,
+      telefono: 'N/A',
+      role: 'admin',
+    }, { merge: true });
+    return;
+  }
+
+  // Si el usuario ya estaba registrado, asegura que en Firestore siga marcado como admin.
+  const usuarioActual = auth.currentUser;
+  if (usuarioActual) {
+    await setDoc(doc(db, 'usuarios', usuarioActual.uid), {
+      username: 'Admin',
+      email: emailAdmin,
+      role: 'admin',
+    }, { merge: true });
+  }
 }
 
 const MENSAJES_POR_CODIGO = {
@@ -144,6 +184,17 @@ export default function Perfil() {
     setProcesando(true);
     let cuentaNueva = null;
     try {
+      // Detecta el caso especial del usuario admin para saltar el catálogo y entrar directo a administración.
+      const esAdminExplicito = !modoRegistro
+        && identificador.toLowerCase() === ADMIN_USERNAME
+        && contrasena === ADMIN_PASSWORD;
+
+      if (esAdminExplicito) {
+        await iniciarSesionAdmin();
+        return;
+      }
+
+      // Inicio normal de sesión con un usuario que no es admin.
       if (!modoRegistro) {
         const authEmail = identificador.includes('@')
           ? identificador
