@@ -1,14 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useContext } from 'react';
-import {
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import {Alert,Pressable,ScrollView,StyleSheet,Text,TextInput,View,} from 'react-native';
 import { addDoc, collection, deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
