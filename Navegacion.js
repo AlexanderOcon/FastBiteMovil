@@ -15,6 +15,7 @@ import DetalleProducto from './screens/DetalleProductos';
 import Carrito from './screens/Carrito';
 import Perfil from './screens/Perfil';
 import AdminProductos from './screens/AdminProductos';
+import Pedidos from './screens/Pedidos';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -217,6 +218,14 @@ function MainNavigation() {
                 options={{
                   title: 'Carrito',
                   tabBarIcon: ({ color, size }) => <Ionicons name="cart-outline" size={size} color={color} />,
+                }}
+              />
+              <Tab.Screen
+                name="PedidosTab"
+                component={Pedidos}
+                options={{
+                  title: 'Pedidos',
+                  tabBarIcon: ({ color, size }) => <Ionicons name="receipt-outline" size={size} color={color} />,
                 }}
               />
               <Tab.Screen
