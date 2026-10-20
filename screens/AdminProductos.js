@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useContext } from 'react';
-import {Alert,Pressable,ScrollView,StyleSheet,Text,TextInput,View,} from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { addDoc, collection, deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
@@ -27,7 +27,7 @@ function textoSeguro(valor) {
   return '';
 }
 
-export default function AdminProductos() {
+export default function AdminProductos({ navigation }) {
   const { user } = useAuth();
   const { cerrarSesion } = useContext(CarritoContext);
   const [productos, setProductos] = useState([]);
@@ -190,4 +190,5 @@ const styles = StyleSheet.create({
   secundario: { marginTop: 4, color: '#777' },
   enlace: { paddingVertical: 6, color: '#ed0016', fontWeight: '700' },
   eliminar: { paddingVertical: 6, color: '#b00020', fontWeight: '700' },
+  headerActions: { alignItems: 'flex-end', gap: 4 },
 });
