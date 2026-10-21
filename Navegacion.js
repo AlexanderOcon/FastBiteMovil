@@ -196,21 +196,24 @@ function MainNavigation() {
       ) : (
         <NavigationContainer>
           {role === 'admin' ? (
-            <Tab.Navigator screenOptions={{ headerShown: false }}>
-              <Tab.Screen
-                name="AdminProductosTab"
-                component={AdminProductos}
-                options={{
-                  title: 'Productos',
-                  tabBarIcon: ({ color, size }) => <Ionicons name="cube-outline" size={size} color={color} />,
-                }}
-              />
+            <Tab.Navigator
+              initialRouteName="AdminPedidosTab"
+              screenOptions={{ headerShown: false }}
+            >
               <Tab.Screen
                 name="AdminPedidosTab"
                 component={AdminPedidos}
                 options={{
                   title: 'Pedidos',
                   tabBarIcon: ({ color, size }) => <Ionicons name="receipt-outline" size={size} color={color} />,
+                }}
+              />
+              <Tab.Screen
+                name="AdminProductosTab"
+                component={AdminProductos}
+                options={{
+                  title: 'Productos',
+                  tabBarIcon: ({ color, size }) => <Ionicons name="cube-outline" size={size} color={color} />,
                 }}
               />
             </Tab.Navigator>

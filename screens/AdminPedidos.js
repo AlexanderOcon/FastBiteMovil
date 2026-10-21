@@ -5,6 +5,8 @@ import { db } from '../firebase/config';
 
 function obtenerEtiquetaEstado(estado) {
   const valor = String(estado || 'pendiente').toLowerCase();
+  if (valor === 'cancelado') return 'Pedido Cancelado';
+  if (valor === 'en-preparacion' || valor === 'en_preparacion' || valor === 'preparacion') return 'Recibido, En preparación';
   if (valor === 'enviado') return 'Enviado';
   if (valor === 'recibido') return 'Recibido';
   return 'Pendiente';
@@ -48,6 +50,12 @@ export default function AdminPedidos({ navigation }) {
       await updateDoc(doc(db, 'pedido', pedido.id), {
         estado: siguienteEstado,
       });
+
+      if (siguienteEstado === 'cancelado') {
+        Alert.alert('Pedido cancelado', 'El cliente verá este pedido como Pedido Cancelado.');
+        return;
+      }
+
       Alert.alert('Pedido actualizado', `El pedido quedó como ${obtenerEtiquetaEstado(siguienteEstado)}.`);
     } catch (error) {
       console.error('Error actualizando el estado del pedido:', error);
@@ -82,8 +90,20 @@ export default function AdminPedidos({ navigation }) {
                   <Text style={styles.pedidoNumero}>Pedido #{String(pedido.id).slice(0, 7)}</Text>
                   <Text style={styles.pedidoFecha}>{formatearFecha(pedido.fecha)}</Text>
                 </View>
-                <View style={[styles.estadoPedido, estadoActual === 'enviado' && styles.estadoPedidoEnviado, estadoActual === 'recibido' && styles.estadoPedidoRecibido]}>
-                  <Text style={[styles.estadoTexto, estadoActual === 'enviado' && styles.estadoTextoEnviado, estadoActual === 'recibido' && styles.estadoTextoRecibido]}>
+                <View style={[
+                  styles.estadoPedido,
+                  estadoActual === 'enviado' && styles.estadoPedidoEnviado,
+                  estadoActual === 'recibido' && styles.estadoPedidoRecibido,
+                  estadoActual === 'en-preparacion' && styles.estadoPedidoPreparacion,
+                  estadoActual === 'cancelado' && styles.estadoPedidoCancelado,
+                ]}>
+                  <Text style={[
+                    styles.estadoTexto,
+                    estadoActual === 'enviado' && styles.estadoTextoEnviado,
+                    estadoActual === 'recibido' && styles.estadoTextoRecibido,
+                    estadoActual === 'en-preparacion' && styles.estadoTextoPreparacion,
+                    estadoActual === 'cancelado' && styles.estadoTextoCancelado,
+                  ]}>
                     {obtenerEtiquetaEstado(estadoActual)}
                   </Text>
                 </View>
@@ -107,8 +127,30 @@ export default function AdminPedidos({ navigation }) {
               <Text style={styles.totalPedido}>{formatearPrecio(pedido.total)}</Text>
 
               {estadoActual === 'pendiente' && (
-                <Pressable style={styles.botonEstado} onPress={() => cambiarEstadoPedido(pedido, 'enviado')}>
-                  <Text style={styles.botonTexto}>Marcar como enviado</Text>
+                <View style={styles.botonesContainer}>
+                  <Pressable style={styles.botonEstado} onPress={() => cambiarEstadoPedido(pedido, 'en-preparacion')}>
+                    <Text style={styles.botonTexto}>Recibido, En preparación</Text>
+                  </Pressable>
+                  <Pressable style={[styles.botonEstado, styles.botonCancelar]} onPress={() => cambiarEstadoPedido(pedido, 'cancelado')}>
+                    <Text style={[styles.botonTexto, styles.botonCancelarTexto]}>Cancelar Pedido</Text>
+                  </Pressable>
+                </View>
+              )}
+
+              {estadoActual === 'en-preparacion' && (
+                <View style={styles.botonesContainer}>
+                  <Pressable style={styles.botonEstado} onPress={() => cambiarEstadoPedido(pedido, 'enviado')}>
+                    <Text style={styles.botonTexto}>Marcar como enviado</Text>
+                  </Pressable>
+                  <Pressable style={[styles.botonEstado, styles.botonCancelar]} onPress={() => cambiarEstadoPedido(pedido, 'cancelado')}>
+                    <Text style={[styles.botonTexto, styles.botonCancelarTexto]}>Cancelar Pedido</Text>
+                  </Pressable>
+                </View>
+              )}
+
+              {estadoActual === 'enviado' && (
+                <Pressable style={[styles.botonEstado, styles.botonCancelar]} onPress={() => cambiarEstadoPedido(pedido, 'cancelado')}>
+                  <Text style={[styles.botonTexto, styles.botonCancelarTexto]}>Cancelar Pedido</Text>
                 </Pressable>
               )}
             </View>
@@ -136,10 +178,17 @@ const styles = StyleSheet.create({
   estadoPedido: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, backgroundColor: '#fff1d6' },
   estadoPedidoEnviado: { backgroundColor: '#e7f5ec' },
   estadoPedidoRecibido: { backgroundColor: '#e9edff' },
+  estadoPedidoPreparacion: { backgroundColor: '#fff2d8' },
+  estadoPedidoCancelado: { backgroundColor: '#fbe7e7' },
   estadoTexto: { color: '#8c5a00', fontSize: 12, fontWeight: '700' },
   estadoTextoEnviado: { color: '#0b7d43' },
   estadoTextoRecibido: { color: '#2544b4' },
-  botonEstado: { marginTop: 12, paddingVertical: 11, alignItems: 'center', borderRadius: 10, backgroundColor: '#ed0016' },
+  estadoTextoPreparacion: { color: '#8a5d00' },
+  estadoTextoCancelado: { color: '#b42318' },
+  botonesContainer: { marginTop: 12, gap: 8 },
+  botonEstado: { paddingVertical: 11, alignItems: 'center', borderRadius: 10, backgroundColor: '#ed0016' },
+  botonCancelar: { backgroundColor: '#d92d20' },
   botonTexto: { color: '#fff', fontWeight: '700' },
+  botonCancelarTexto: { color: '#fff' },
   vacio: { color: '#666' },
 });

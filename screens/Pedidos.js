@@ -15,6 +15,8 @@ import { db } from '../firebase/config';
 
 function obtenerEtiquetaEstado(estado) {
   const valor = String(estado || 'pendiente').toLowerCase();
+  if (valor === 'cancelado') return 'Pedido Cancelado';
+  if (valor === 'en-preparacion' || valor === 'en_preparacion' || valor === 'preparacion') return 'Recibido, En preparación';
   if (valor === 'enviado') return 'Enviado';
   if (valor === 'recibido') return 'Recibido';
   return 'Pendiente';
@@ -80,8 +82,20 @@ function TarjetaPedido({ pedido, onRecibir, mostrarBotonRecibido }) {
           <Text style={styles.numeroPedido}>Pedido #{pedido.id.slice(0, 7)}</Text>
           <Text style={styles.fecha}>{formatearFecha(pedido.fecha)}</Text>
         </View>
-        <View style={[styles.estado, estado === 'enviado' && styles.estadoEnviado, estado === 'recibido' && styles.estadoRecibido]}>
-          <Text style={[styles.textoEstado, estado === 'enviado' && styles.textoEstadoEnviado, estado === 'recibido' && styles.textoEstadoRecibido]}>{estadoTexto}</Text>
+        <View style={[
+          styles.estado,
+          estado === 'enviado' && styles.estadoEnviado,
+          estado === 'recibido' && styles.estadoRecibido,
+          estado === 'en-preparacion' && styles.estadoPreparacion,
+          estado === 'cancelado' && styles.estadoCancelado,
+        ]}>
+          <Text style={[
+            styles.textoEstado,
+            estado === 'enviado' && styles.textoEstadoEnviado,
+            estado === 'recibido' && styles.textoEstadoRecibido,
+            estado === 'en-preparacion' && styles.textoEstadoPreparacion,
+            estado === 'cancelado' && styles.textoEstadoCancelado,
+          ]}>{estadoTexto}</Text>
         </View>
       </View>
 
@@ -232,9 +246,13 @@ const styles = StyleSheet.create({
   estado: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, backgroundColor: '#fff1d6' },
   estadoEnviado: { backgroundColor: '#e7f5ec' },
   estadoRecibido: { backgroundColor: '#e9edff' },
+  estadoPreparacion: { backgroundColor: '#fff2d8' },
+  estadoCancelado: { backgroundColor: '#fbe7e7' },
   textoEstado: { color: '#8c5a00', fontSize: 12, fontWeight: '700', textTransform: 'capitalize' },
   textoEstadoEnviado: { color: '#0b7d43' },
   textoEstadoRecibido: { color: '#2544b4' },
+  textoEstadoPreparacion: { color: '#8a5d00' },
+  textoEstadoCancelado: { color: '#b42318' },
   producto: { marginVertical: 6, flexDirection: 'row', alignItems: 'center' },
   imagenProducto: { width: 54, height: 54, borderRadius: 8 },
   imagenVacia: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#f2f2f2' },
