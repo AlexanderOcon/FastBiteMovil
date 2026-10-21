@@ -1,10 +1,6 @@
-// Importa React y los hooks para leer el contexto y mantener estado local.
 import React, { useContext, useState } from 'react';
-// Importa componentes nativos para alertas, imagen, botones, texto, vistas y estilos.
 import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
-// Importa los iconos de más y menos del selector de cantidad.
 import { Ionicons } from '@expo/vector-icons';
-// Importa el contexto que permite añadir productos al carrito compartido.
 import { CarritoContext } from '../context/CarritoContext';
 
 // Muestra la información y las acciones del producto seleccionado.

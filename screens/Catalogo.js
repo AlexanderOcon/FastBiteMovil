@@ -1,16 +1,9 @@
-// Importa React y hooks para cargar datos y conservar valores de la pantalla.
 import React, { useEffect, useState } from 'react';
-// Importa los componentes nativos usados para construir el catálogo.
 import {Image,Pressable,ScrollView,StyleSheet,Text,TextInput,View,} from 'react-native';
-// Permite cambiar el aspecto de la barra de estado del dispositivo.
 import { StatusBar } from 'expo-status-bar';
-// Proporciona el icono de lupa para el buscador.
 import { Ionicons } from '@expo/vector-icons';
-// Importa las funciones necesarias para leer documentos de Firestore.
 import { collection, onSnapshot } from 'firebase/firestore';
-// Importa la instancia configurada de la base de datos.
 import { db } from "../firebase/config";
-// Importa el componente reutilizable que representa un producto.
 import Produtos from '../components/Produtos';
 
 // Muestra productos y permite filtrarlos; navigation abre su pantalla de detalle.

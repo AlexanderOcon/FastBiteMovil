@@ -1,6 +1,4 @@
-// Importa React para declarar el componente reutilizable.
 import React from 'react';
-// Importa elementos nativos para mostrar imagen, textos, tarjeta y estilos.
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 // Representa un producto; las props contienen sus datos y su acción al pulsarlo.
