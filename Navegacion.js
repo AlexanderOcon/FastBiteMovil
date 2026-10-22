@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, View } from 'react-native';
+import { ActivityIndicator, Alert, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -15,6 +15,7 @@ import DetalleProducto from './screens/DetalleProductos';
 import Carrito from './screens/Carrito';
 import Perfil from './screens/Perfil';
 import AdminProductos from './screens/AdminProductos';
+import AdminPedidos from './screens/AdminPedidos';
 import Pedidos from './screens/Pedidos';
 
 const Tab = createBottomTabNavigator();
@@ -195,13 +196,27 @@ function MainNavigation() {
       ) : (
         <NavigationContainer>
           {role === 'admin' ? (
-            <Stack.Navigator>
-              <Stack.Screen
-                name="AdminProductos"
-                component={AdminProductos}
-                options={{ title: 'Administración', headerShown: false }}
+            <Tab.Navigator
+              initialRouteName="AdminPedidosTab"
+              screenOptions={{ headerShown: false }}
+            >
+              <Tab.Screen
+                name="AdminPedidosTab"
+                component={AdminPedidos}
+                options={{
+                  title: 'Pedidos',
+                  tabBarIcon: ({ color, size }) => <Ionicons name="receipt-outline" size={size} color={color} />,
+                }}
               />
-            </Stack.Navigator>
+              <Tab.Screen
+                name="AdminProductosTab"
+                component={AdminProductos}
+                options={{
+                  title: 'Productos',
+                  tabBarIcon: ({ color, size }) => <Ionicons name="cube-outline" size={size} color={color} />,
+                }}
+              />
+            </Tab.Navigator>
           ) : (
             <Tab.Navigator screenOptions={{ headerShown: false }}>
               <Tab.Screen
