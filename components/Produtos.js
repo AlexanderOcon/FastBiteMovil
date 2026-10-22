@@ -66,8 +66,10 @@ const styles = StyleSheet.create({
   },
   // Hace que la imagen ocupe el ancho de la tarjeta con altura fija.
   imagen: {
-    width: '100%',
-    height: 125,
+    width: "90%",
+    height: 90,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   // Posiciona y da fondo a la etiqueta de calificación.
   rating: {
