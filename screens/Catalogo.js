@@ -1,5 +1,18 @@
-import React, { useEffect, useState } from 'react';
-import {Image,Pressable,ScrollView,StyleSheet,Text,TextInput,View,} from 'react-native';
+// Importa React y hooks para cargar datos y conservar valores de la pantalla.
+import React, { useEffect, useRef, useState } from 'react';
+// Importa los componentes nativos usados para construir el catálogo.
+import {
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
+// Permite cambiar el aspecto de la barra de estado del dispositivo.
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { collection, onSnapshot } from 'firebase/firestore';
@@ -19,12 +32,33 @@ function normalizarTexto(valor) {
 }
 
 export default function Catalogo({ navigation }) {
+  const { width: anchoVentana } = useWindowDimensions();
+  const catalogoEnfocado = useIsFocused();
+  const scrollOfertasRef = useRef(null);
   // Guarda los documentos de productos descargados desde Firestore.
   const [productos, setProductos] = useState([]);
+  const [indiceOferta, setIndiceOferta] = useState(0);
   // Guarda la categoría seleccionada; inicia mostrando todos los productos.
   const [categoriaActiva, setCategoriaActiva] = useState('Todos');
   // Guarda lo que la persona escribe en el campo de búsqueda.
   const [busqueda, setBusqueda] = useState('');
+  const anchoOferta = anchoVentana - 32;
+
+  useEffect(() => {
+    if (!catalogoEnfocado || productos.length < 2) return undefined;
+
+    const siguienteIndice =
+      indiceOferta >= productos.length - 1 ? 0 : indiceOferta + 1;
+    const temporizador = setTimeout(() => {
+      scrollOfertasRef.current?.scrollTo({
+        x: siguienteIndice * (anchoOferta + 12),
+        animated: true,
+      });
+      setIndiceOferta(siguienteIndice);
+    }, 4000);
+
+    return () => clearTimeout(temporizador);
+  }, [anchoOferta, catalogoEnfocado, indiceOferta, productos.length]);
   // Obtiene las categorías únicas de los productos y agrega la opción "Todos".
   const categorias = [
     'Todos',
@@ -90,25 +124,69 @@ export default function Catalogo({ navigation }) {
 
       {/* Permite recorrer verticalmente todo el contenido del catálogo. */}
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Contiene el mensaje y la imagen de la promoción. */}
-        <View style={styles.oferta}>
-          <View>
-            {/* Etiqueta que identifica la promoción. */}
-            <Text style={styles.ofertaLabel}>OFERTA DEL DÍA</Text>
-            {/* Texto principal de la oferta, con un salto de línea visual. */}
-            <Text style={styles.ofertaTitulo}>2x1 en{'\n'}Hamburgesas</Text>
-
-            {/* Botón visual que muestra cuándo es válida la promoción. */}
-            <Pressable style={styles.ofertaBoton}>
-              <Text style={styles.ofertaBotonTexto}>Válido hoy</Text>
-            </Pressable>
+        {/* Permite recorrer productos destacados como tarjetas de oferta. */}
+        {productos.length > 0 && (
+          <View style={styles.carruselOfertas}>
+            <ScrollView
+              ref={scrollOfertasRef}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.ofertas}
+              snapToInterval={anchoOferta + 12}
+              snapToAlignment="start"
+              decelerationRate="fast"
+              onMomentumScrollEnd={({ nativeEvent }) => {
+                setIndiceOferta(
+                  Math.round(nativeEvent.contentOffset.x / (anchoOferta + 12)),
+                );
+              }}
+            >
+              {productos.map((producto) => (
+                <Pressable
+                  key={producto.id}
+                  style={[styles.oferta, { width: anchoOferta }]}
+                  onPress={() => navigation.navigate('Detalle', producto)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Ver ${producto.nombre}`}
+                >
+                  <View style={styles.ofertaInfo}>
+                    <Text style={styles.ofertaLabel}>DESTACADO DEL MENÚ</Text>
+                    <Text style={styles.ofertaTitulo} numberOfLines={2}>
+                      {producto.nombre}
+                    </Text>
+                    <Text style={styles.ofertaBotonTexto}>
+                      {producto.precio !== undefined &&
+                      producto.precio !== null &&
+                      producto.precio !== ''
+                        ? `C$${producto.precio}`
+                        : 'Ver producto'}
+                    </Text>
+                  </View>
+                  {producto.imagen ? (
+                    <Image
+                      source={{ uri: producto.imagen }}
+                      style={styles.ofertaImagen}
+                    />
+                  ) : null}
+                </Pressable>
+              ))}
+            </ScrollView>
+            {productos.length > 1 && (
+              <View style={styles.indicadoresOfertas}>
+                {productos.map((producto, indice) => (
+                  <View
+                    key={producto.id}
+                    style={[
+                      styles.indicadorOferta,
+                      indice === Math.min(indiceOferta, productos.length - 1) &&
+                        styles.indicadorOfertaActivo,
+                    ]}
+                  />
+                ))}
+              </View>
+            )}
           </View>
-
-          {/* Presenta la tercera imagen disponible, cuando ya fue cargada. */}
-          {productos[2]?.imagen ? (
-            <Image source={{ uri: productos[2].imagen }} style={styles.ofertaImagen} />
-          ) : null}
-        </View>
+        )}
 
         {/* Agrupa la búsqueda, los filtros y los resultados. */}
         <View style={styles.contenido}>
@@ -213,15 +291,28 @@ const styles = StyleSheet.create({
   container: { 
     flex: 1, 
     backgroundColor: '#f7f7f7' },
-  // Estiliza el banner promocional y alinea texto e imagen.
+  // Alinea las tarjetas del carrusel y deja espacio entre ellas.
+  carruselOfertas: {
+    marginBottom: 14,
+    marginTop:10,
+  },
+  ofertas: {
+    gap: 12,
+    paddingHorizontal: 16,
+  },
+  // Estiliza una tarjeta destacada y alinea texto e imagen.
   oferta: {
-    margin: 16,
+    minHeight: 112,
     padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderRadius: 14,
     backgroundColor: '#ff2639',
+  },
+  ofertaInfo: {
+    flex: 1,
+    marginRight: 10,
   },
   // Define el aspecto del rótulo de la promoción.
   ofertaLabel: { 
@@ -234,24 +325,39 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '900',
   },
-  // Estiliza y posiciona el botón de la promoción.
-  ofertaBoton: {
+  // Muestra el precio destacado como una etiqueta.
+  ofertaBotonTexto: {
     alignSelf: 'flex-start',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12,
     backgroundColor: '#ffd000',
-  },
-  // Define el color y el tamaño del texto del botón promocional.
-  ofertaBotonTexto: { 
     color: '#715000', 
     fontSize: 10, 
-    fontWeight: '700' },
+    fontWeight: '700',
+    overflow: 'hidden',
+  },
   // Ajusta el tamaño y redondeado de la imagen promocional.
   ofertaImagen: { 
     width: 78, 
     height: 78, 
     borderRadius: 10 
+  },
+  indicadoresOfertas: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 5,
+    marginTop: 8,
+  },
+  indicadorOferta: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#d5d5d8',
+  },
+  indicadorOfertaActivo: {
+    width: 16,
+    backgroundColor: '#ed0016',
   },
   // Añade espacio horizontal a la sección de contenido.
   contenido: { 
