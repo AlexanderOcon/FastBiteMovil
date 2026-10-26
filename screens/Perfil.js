@@ -1,5 +1,6 @@
 import { useContext, useEffect, useState } from 'react';
 import {ActivityIndicator,Alert,Pressable,ScrollView,StyleSheet,Text,TextInput,View,} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import {createUserWithEmailAndPassword,deleteUser,signInWithEmailAndPassword,updateProfile,} from 'firebase/auth';
 import {addDoc,collection,deleteDoc,doc,onSnapshot,setDoc,updateDoc,} from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
@@ -329,67 +330,358 @@ export default function Perfil() {
 
   return (
     <ScrollView contentContainerStyle={styles.contenedor}>
-      <Text style={styles.titulo}>Mi cuenta</Text>
-      <View style={styles.tarjetaCuenta}>
-        <Text style={styles.nombreCuenta}>{perfil?.username || user.displayName || 'Cliente FastBite'}</Text>
-        <Text style={styles.datoCuenta}>Teléfono: {perfil?.telefono || 'No disponible'}</Text>
-        <Text style={styles.datoCuenta}>Correo: {perfil?.email || 'No disponible'}</Text>
+      <View style={styles.encabezadoPerfil}>
+        <View style={styles.avatarPerfil}>
+          <Ionicons name="person" size={26} color="#fff" />
+        </View>
+        <View style={styles.encabezadoTexto}>
+          <Text style={styles.titulo}>Mi cuenta</Text>
+          <Text style={styles.subtituloEncabezado}>Tu perfil FastBite</Text>
+        </View>
       </View>
-      <Text selectable style={styles.uid}>UID: {user.uid}</Text>
-      <Text style={styles.rol}>Rol: {role === 'admin' ? 'Administrador' : 'Cliente'}</Text>
+      <View style={styles.tarjetaCuenta}>
+        <View style={styles.identidadCuenta}>
+          <View style={styles.avatarCuenta}>
+            <Ionicons name="person-outline" size={22} color="#ed0016" />
+          </View>
+          <View style={styles.identidadTexto}>
+            <Text style={styles.nombreCuenta} numberOfLines={1}>
+              {perfil?.username || user.displayName || 'Cliente FastBite'}
+            </Text>
+            <View style={styles.insigniaRol}>
+              <Text style={styles.textoInsigniaRol}>
+                {role === 'admin' ? 'Administrador' : 'Cliente'}
+              </Text>
+            </View>
+          </View>
+        </View>
+        <View style={styles.separadorCuenta} />
+        <View style={styles.filaDatoCuenta}>
+          <Ionicons name="call-outline" size={17} color="#ed0016" />
+          <Text style={styles.datoCuenta}>{perfil?.telefono || 'Teléfono no disponible'}</Text>
+        </View>
+        <View style={styles.filaDatoCuenta}>
+          <Ionicons name="mail-outline" size={17} color="#ed0016" />
+          <Text style={styles.datoCuenta} numberOfLines={1}>
+            {perfil?.email || 'Correo no disponible'}
+          </Text>
+        </View>
+      </View>
 
-      <Text style={styles.subtitulo}>Mis direcciones</Text>
+      <View style={styles.metadataPerfil}>
+        <Ionicons name="shield-checkmark-outline" size={15} color="#85858d" />
+        <Text selectable style={styles.uid}>UID: {user.uid}</Text>
+      </View>
+
+      <View style={styles.encabezadoSeccion}>
+        <Text style={styles.subtitulo}>Mis direcciones</Text>
+        <View style={styles.contadorDirecciones}>
+          <Text style={styles.textoContador}>{direcciones.length}</Text>
+        </View>
+      </View>
+      {direcciones.length === 0 && (
+        <View style={styles.sinDirecciones}>
+          <Ionicons name="location-outline" size={22} color="#85858d" />
+          <Text style={styles.textoSinDirecciones}>
+            Aún no tienes direcciones guardadas.
+          </Text>
+        </View>
+      )}
       {direcciones.map((item) => (
         <View key={item.id} style={styles.tarjetaDireccion}>
+          <View style={styles.iconoDireccion}>
+            <Ionicons name="location-outline" size={20} color="#ed0016" />
+          </View>
           <View style={styles.detalleDireccion}>
             <Text style={styles.nombreDireccion}>{item.etiqueta}</Text>
-            <Text>{item.direccion}</Text>
+            <Text style={styles.textoDireccion}>{item.direccion}</Text>
             {!!item.referencia && <Text style={styles.secundario}>{item.referencia}</Text>}
             <Text style={styles.secundario}>{item.telefono}</Text>
+            <View style={styles.accionesDireccion}>
+              <Pressable
+                style={styles.botonAccionDireccion}
+                onPress={() => editarDireccion(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`Editar dirección ${item.etiqueta}`}
+              >
+                <Ionicons name="create-outline" size={15} color="#ed0016" />
+                <Text style={styles.enlace}>Editar</Text>
+              </Pressable>
+              <Pressable
+                style={styles.botonAccionDireccion}
+                onPress={() => eliminarDireccion(item.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`Eliminar dirección ${item.etiqueta}`}
+              >
+                <Ionicons name="trash-outline" size={15} color="#b00020" />
+                <Text style={styles.eliminar}>Eliminar</Text>
+              </Pressable>
+            </View>
           </View>
-          <Pressable onPress={() => editarDireccion(item)}><Text style={styles.enlace}>Editar</Text></Pressable>
-          <Pressable onPress={() => eliminarDireccion(item.id)}><Text style={styles.eliminar}>Eliminar</Text></Pressable>
         </View>
       ))}
 
-      <Text style={styles.subtitulo}>{idDireccionEditando ? 'Editar dirección' : 'Agregar dirección'}</Text>
-      <TextInput style={styles.input} value={etiqueta} onChangeText={setEtiqueta} placeholder="Nombre (Casa, Trabajo...)" />
-      <TextInput style={styles.input} value={direccion} onChangeText={setDireccion} placeholder="Dirección completa" />
-      <TextInput style={styles.input} value={referencia} onChangeText={setReferencia} placeholder="Referencia (opcional)" />
-      <TextInput style={styles.input} value={telefono} onChangeText={setTelefono} placeholder="Teléfono de contacto" keyboardType="phone-pad" />
-      <Pressable style={styles.boton} onPress={guardarDireccion}>
-        <Text style={styles.botonTexto}>{idDireccionEditando ? 'Guardar cambios' : 'Agregar dirección'}</Text>
-      </Pressable>
+      <Text style={styles.subtitulo}>
+        {idDireccionEditando ? 'Editar dirección' : 'Agregar dirección'}
+      </Text>
+      <View style={styles.formularioDireccion}>
+        <TextInput
+          style={styles.input}
+          value={etiqueta}
+          onChangeText={setEtiqueta}
+          placeholder="Nombre (Casa, Trabajo...)"
+        />
+        <TextInput
+          style={styles.input}
+          value={direccion}
+          onChangeText={setDireccion}
+          placeholder="Dirección completa"
+        />
+        <TextInput
+          style={styles.input}
+          value={referencia}
+          onChangeText={setReferencia}
+          placeholder="Referencia (opcional)"
+        />
+        <TextInput
+          style={styles.input}
+          value={telefono}
+          onChangeText={setTelefono}
+          placeholder="Teléfono de contacto"
+          keyboardType="phone-pad"
+        />
+        <Pressable style={styles.boton} onPress={guardarDireccion}>
+          <Ionicons name="add-circle-outline" size={19} color="#fff" />
+          <Text style={styles.botonTexto}>
+            {idDireccionEditando ? 'Guardar cambios' : 'Agregar dirección'}
+          </Text>
+        </Pressable>
+      </View>
       {idDireccionEditando && (
-        <Pressable onPress={limpiarFormularioDireccion}>
+        <Pressable style={styles.botonCancelar} onPress={limpiarFormularioDireccion}>
           <Text style={styles.enlace}>Cancelar edición</Text>
         </Pressable>
       )}
       <Pressable style={[styles.boton, styles.botonSalir]} onPress={cerrarSesion}>
-        <Text style={styles.botonTexto}>Cerrar sesión</Text>
+        <Ionicons name="log-out-outline" size={19} color="#555" />
+        <Text style={styles.textoBotonSalir}>Cerrar sesión</Text>
       </Pressable>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  contenedor: { flexGrow: 1, padding: 22, backgroundColor: '#f7f7f7' },
-  titulo: { marginBottom: 8, color: '#29292e', fontSize: 25, fontWeight: '800' },
-  descripcion: { marginBottom: 18, color: '#666', fontSize: 15 },
-  tarjetaCuenta: { marginVertical: 8, padding: 16, borderRadius: 12, backgroundColor: '#fff' },
-  nombreCuenta: { marginBottom: 8, color: '#29292e', fontSize: 18, fontWeight: '700' },
-  datoCuenta: { marginTop: 4, color: '#555' },
-  uid: { marginBottom: 12, color: '#777', fontSize: 12 },
-  rol: { marginBottom: 20, color: '#555' },
-  subtitulo: { marginTop: 14, marginBottom: 10, color: '#29292e', fontSize: 18, fontWeight: '700' },
-  input: { marginBottom: 11, padding: 13, borderRadius: 10, backgroundColor: '#fff', color: '#222' },
-  boton: { marginVertical: 6, padding: 14, alignItems: 'center', borderRadius: 10, backgroundColor: '#ed0016' },
-  botonTexto: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  enlace: { marginVertical: 12, color: '#ed0016', fontWeight: '700' },
-  tarjetaDireccion: { marginBottom: 9, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 10, backgroundColor: '#fff' },
+  contenedor: {
+    flexGrow: 1,
+    padding: 20,
+    paddingBottom: 32,
+    backgroundColor: "#f7f7f7",
+  },
+  encabezadoPerfil: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 18,
+    marginBottom: 14,
+  },
+  avatarPerfil: {
+    width: 48,
+    height: 48,
+    marginRight: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 24,
+    backgroundColor: "#ed0016",
+  },
+  encabezadoTexto: { flex: 1 },
+  titulo: {
+    marginBottom: 2,
+    color: "#29292e",
+    fontSize: 25,
+    fontWeight: "800",
+  },
+  subtituloEncabezado: { color: "#85858d", fontSize: 13 },
+  descripcion: { marginBottom: 18, color: "#666", fontSize: 15 },
+  tarjetaCuenta: {
+    marginBottom: 14,
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: "#fff",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+  },
+  identidadCuenta: { flexDirection: "row", alignItems: "center" },
+  avatarCuenta: {
+    width: 42,
+    height: 42,
+    marginRight: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 21,
+    backgroundColor: "#fff0f1",
+  },
+  identidadTexto: { flex: 1 },
+  nombreCuenta: {
+    marginBottom: 5,
+    color: "#29292e",
+    fontSize: 17,
+    fontWeight: "700",
+  },
+  insigniaRol: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 10,
+    backgroundColor: "#fff0f1",
+  },
+  textoInsigniaRol: { color: "#c90014", fontSize: 11, fontWeight: "700" },
+  separadorCuenta: {
+    height: 1,
+    marginVertical: 13,
+    backgroundColor: "#f0f0f2",
+  },
+  filaDatoCuenta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    marginTop: 8,
+  },
+  datoCuenta: { flex: 1, color: "#555", fontSize: 13 },
+  metadataPerfil: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 8,
+  },
+  uid: { flex: 1, color: "#85858d", fontSize: 11 },
+  encabezadoSeccion: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 12,
+    marginBottom: 10,
+  },
+  subtitulo: {
+    marginTop: 8,
+    marginBottom: 10,
+    color: "#29292e",
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  contadorDirecciones: {
+    minWidth: 26,
+    height: 26,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 13,
+    backgroundColor: "#fff0f1",
+  },
+  textoContador: { color: "#c90014", fontSize: 12, fontWeight: "700" },
+  sinDirecciones: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    marginBottom: 10,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: "#fff",
+  },
+  textoSinDirecciones: { color: "#777", fontSize: 13 },
+  tarjetaDireccion: {
+    marginBottom: 10,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    borderRadius: 14,
+    backgroundColor: "#fff",
+    elevation: 1,
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  iconoDireccion: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 18,
+    backgroundColor: "#fff0f1",
+  },
   detalleDireccion: { flex: 1 },
-  nombreDireccion: { marginBottom: 4, fontWeight: '700' },
-  secundario: { marginTop: 3, color: '#777' },
-  eliminar: { color: '#b00020', fontWeight: '600' },
-  botonSalir: { marginTop: 28, backgroundColor: '#555' },
+  nombreDireccion: {
+    marginBottom: 5,
+    color: "#29292e",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  textoDireccion: { color: "#444", fontSize: 13, lineHeight: 19 },
+  secundario: { marginTop: 4, color: "#85858d", fontSize: 12 },
+  accionesDireccion: { flexDirection: "row", gap: 16, marginTop: 10 },
+  botonAccionDireccion: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 3,
+  },
+  input: {
+    marginBottom: 10,
+    paddingHorizontal: 13,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: "#eeeeF0",
+    borderRadius: 10,
+    backgroundColor: "#f9f9fa",
+    color: "#222",
+    fontSize: 14,
+  },
+  formularioDireccion: {
+    padding: 14,
+    borderRadius: 15,
+    backgroundColor: "#fff",
+  },
+  boton: {
+    marginVertical: 6,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: 11,
+    backgroundColor: "#ed0016",
+  },
+  botonTexto: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  enlace: {
+    color: "#ed0016",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  botonCancelar: {
+    alignSelf: "center",
+    paddingVertical: 8,
+  },
+  eliminar: {
+    color: "#b00020",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  botonSalir: {
+    marginTop: 20,
+    padding: 13,
+    borderWidth: 1,
+    borderColor: "#dedee2",
+    backgroundColor: "#fff",
+  },
+  textoBotonSalir: {
+    color: "#555",
+    fontSize: 14,
+    fontWeight: "700",
+  },
 });
