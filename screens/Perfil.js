@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState } from 'react';
-import {ActivityIndicator,Alert,Pressable,ScrollView,StyleSheet,Text,TextInput,View,} from 'react-native';
+import {ActivityIndicator,Alert,KeyboardAvoidingView,Platform,Pressable,ScrollView,StyleSheet,Text,TextInput,View,} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {createUserWithEmailAndPassword,deleteUser,signInWithEmailAndPassword,updateProfile,} from 'firebase/auth';
 import {addDoc,collection,deleteDoc,doc,getDoc,onSnapshot,setDoc,updateDoc,writeBatch,} from 'firebase/firestore';
@@ -99,6 +99,8 @@ export default function Perfil() {
   const [telefonoPerfil, setTelefonoPerfil] = useState('');
   const [guardandoPerfil, setGuardandoPerfil] = useState(false);
   const [direcciones, setDirecciones] = useState([]);
+  const [direccionesAbiertas, setDireccionesAbiertas] = useState(false);
+  const [idDireccionSeleccionada, setIdDireccionSeleccionada] = useState(null);
   const [idDireccionEditando, setIdDireccionEditando] = useState(null);
   const [etiqueta, setEtiqueta] = useState('');
   const [direccion, setDireccion] = useState('');
@@ -134,6 +136,17 @@ export default function Perfil() {
       unsubscribeAddresses();
     };
   }, [user?.uid]);
+
+  useEffect(() => {
+    if (direcciones.length === 0) {
+      setIdDireccionSeleccionada(null);
+      setDireccionesAbiertas(false);
+      return;
+    }
+    if (!direcciones.some((item) => item.id === idDireccionSeleccionada)) {
+      setIdDireccionSeleccionada(direcciones[0].id);
+    }
+  }, [direcciones, idDireccionSeleccionada]);
 
   const entrarORegistrarse = async () => {
     const identificador = nombreUsuario.trim().toLowerCase();
@@ -340,6 +353,8 @@ export default function Perfil() {
   };
 
   const editarDireccion = (item) => {
+    setIdDireccionSeleccionada(item.id);
+    setDireccionesAbiertas(false);
     setIdDireccionEditando(item.id);
     setEtiqueta(item.etiqueta || '');
     setDireccion(item.direccion || '');
@@ -365,9 +380,21 @@ export default function Perfil() {
     ]);
   };
 
+  const direccionPerfilSeleccionada = direcciones.find(
+    (item) => item.id === idDireccionSeleccionada,
+  );
+
   if (!user) {
     return (
-      <ScrollView contentContainerStyle={styles.contenedor}>
+      <KeyboardAvoidingView
+        style={styles.contenedorTeclado}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+      <ScrollView
+        contentContainerStyle={styles.contenedor}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+      >
         <Text style={styles.titulo}>{modoRegistro ? 'Crear cuenta' : 'Iniciar sesión'}</Text>
         <Text style={styles.descripcion}>
           {modoRegistro
@@ -423,11 +450,20 @@ export default function Perfil() {
           </Text>
         </Pressable>
       </ScrollView>
+      </KeyboardAvoidingView>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.contenedor}>
+    <KeyboardAvoidingView
+      style={styles.contenedorTeclado}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+    <ScrollView
+      contentContainerStyle={styles.contenedor}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+    >
       <View style={styles.tarjetaCuenta}>
         <View style={styles.identidadCuenta}>
           <View style={styles.avatarCuenta}>
@@ -451,6 +487,15 @@ export default function Perfil() {
               </Text>
             )}
           </View>
+          <Pressable
+            style={styles.botonSalirPerfil}
+            onPress={cerrarSesion}
+            accessibilityRole="button"
+            accessibilityLabel="Cerrar sesión"
+          >
+            <Ionicons name="log-out-outline" size={17} color="#fff" />
+            <Text style={styles.textoSalirPerfil}>Salir</Text>
+          </Pressable>
         </View>
         <View style={styles.separadorCuenta} />
         <View style={styles.filaDatoCuenta}>
@@ -521,57 +566,6 @@ export default function Perfil() {
         )}
       </View>
 
-      <View style={styles.encabezadoSeccion}>
-        <View>
-          <Text style={styles.subtitulo}>Mis direcciones</Text>
-          <Text style={styles.descripcionSeccion}>Lugares donde recibes tus pedidos</Text>
-        </View>
-        <View style={styles.contadorDirecciones}>
-          <Text style={styles.textoContador}>{direcciones.length}</Text>
-        </View>
-      </View>
-      {direcciones.length === 0 && (
-        <View style={styles.sinDirecciones}>
-          <Ionicons name="location-outline" size={22} color="#85858d" />
-          <Text style={styles.textoSinDirecciones}>
-            Aún no tienes direcciones guardadas.
-          </Text>
-        </View>
-      )}
-      {direcciones.map((item) => (
-        <View key={item.id} style={styles.tarjetaDireccion}>
-          <View style={styles.iconoDireccion}>
-            <Ionicons name="location-outline" size={20} color="#ed0016" />
-          </View>
-          <View style={styles.detalleDireccion}>
-            <Text style={styles.nombreDireccion}>{item.etiqueta}</Text>
-            <Text style={styles.textoDireccion}>{item.direccion}</Text>
-            {!!item.referencia && <Text style={styles.secundario}>{item.referencia}</Text>}
-            <Text style={styles.secundario}>{item.telefono}</Text>
-            <View style={styles.accionesDireccion}>
-              <Pressable
-                style={styles.botonAccionDireccion}
-                onPress={() => editarDireccion(item)}
-                accessibilityRole="button"
-                accessibilityLabel={`Editar dirección ${item.etiqueta}`}
-              >
-                <Ionicons name="create-outline" size={15} color="#ed0016" />
-                <Text style={styles.enlace}>Editar</Text>
-              </Pressable>
-              <Pressable
-                style={styles.botonAccionDireccion}
-                onPress={() => eliminarDireccion(item.id)}
-                accessibilityRole="button"
-                accessibilityLabel={`Eliminar dirección ${item.etiqueta}`}
-              >
-                <Ionicons name="trash-outline" size={15} color="#b00020" />
-                <Text style={styles.eliminar}>Eliminar</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      ))}
-
       <View style={styles.encabezadoFormulario}>
         <Text style={styles.subtitulo}>
           {idDireccionEditando ? 'Editar dirección' : 'Agregar dirección'}
@@ -616,15 +610,121 @@ export default function Perfil() {
           <Text style={styles.enlace}>Cancelar edición</Text>
         </Pressable>
       )}
-      <Pressable style={[styles.boton, styles.botonSalir]} onPress={cerrarSesion}>
-        <Ionicons name="log-out-outline" size={19} color="#555" />
-        <Text style={styles.textoBotonSalir}>Cerrar sesión</Text>
-      </Pressable>
+
+      <View style={styles.encabezadoSeccion}>
+        <View>
+          <Text style={styles.subtitulo}>Mis direcciones</Text>
+          <Text style={styles.descripcionSeccion}>Lugares donde recibes tus pedidos</Text>
+        </View>
+        <View style={styles.contadorDirecciones}>
+          <Text style={styles.textoContador}>{direcciones.length}</Text>
+        </View>
+      </View>
+      {direcciones.length > 0 && (
+        <>
+          <Pressable
+            style={styles.selectorDirecciones}
+            onPress={() => setDireccionesAbiertas((abiertas) => !abiertas)}
+            accessibilityRole="button"
+            accessibilityLabel="Elegir dirección guardada"
+            accessibilityState={{ expanded: direccionesAbiertas }}
+          >
+            <View style={styles.iconoDireccion}>
+              <Ionicons name="location" size={20} color="#ed0016" />
+            </View>
+            <View style={styles.detalleDireccion}>
+              <Text style={styles.nombreDireccion}>
+                {direccionPerfilSeleccionada?.etiqueta || 'Selecciona una dirección'}
+              </Text>
+              {!!direccionPerfilSeleccionada && (
+                <Text style={styles.textoDireccion} numberOfLines={1}>
+                  {direccionPerfilSeleccionada.direccion}
+                </Text>
+              )}
+              {!!direccionPerfilSeleccionada?.telefono && (
+                <Text style={styles.secundario}>{direccionPerfilSeleccionada.telefono}</Text>
+              )}
+            </View>
+            <Ionicons
+              name={direccionesAbiertas ? 'chevron-up' : 'chevron-down'}
+              size={20}
+              color="#c90014"
+            />
+          </Pressable>
+          {direccionesAbiertas && (
+            <View style={styles.opcionesDireccionesPerfil}>
+              {direcciones.map((item) => {
+                const seleccionada = item.id === idDireccionSeleccionada;
+                return (
+                  <Pressable
+                    key={item.id}
+                    style={[
+                      styles.opcionDireccionPerfil,
+                      seleccionada && styles.opcionDireccionPerfilActiva,
+                    ]}
+                    onPress={() => {
+                      setIdDireccionSeleccionada(item.id);
+                      setDireccionesAbiertas(false);
+                    }}
+                    accessibilityRole="radio"
+                    accessibilityLabel={`${item.etiqueta}, ${item.direccion}`}
+                    accessibilityState={{ selected: seleccionada }}
+                  >
+                    <View style={styles.detalleDireccion}>
+                      <Text style={styles.nombreDireccion}>{item.etiqueta}</Text>
+                      <Text style={styles.textoDireccion}>{item.direccion}</Text>
+                      {!!item.referencia && (
+                        <Text style={styles.secundario}>{item.referencia}</Text>
+                      )}
+                      {!!item.telefono && (
+                        <Text style={styles.secundario}>{item.telefono}</Text>
+                      )}
+                    </View>
+                    {seleccionada && (
+                      <Ionicons name="checkmark-circle" size={21} color="#ed0016" />
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+          {!!direccionPerfilSeleccionada && (
+            <View style={styles.accionesDireccion}>
+              <Pressable
+                style={styles.botonAccionDireccion}
+                onPress={() => editarDireccion(direccionPerfilSeleccionada)}
+                accessibilityRole="button"
+                accessibilityLabel={`Editar dirección ${direccionPerfilSeleccionada.etiqueta}`}
+              >
+                <Ionicons name="create-outline" size={15} color="#ed0016" />
+                <Text style={styles.enlace}>Editar</Text>
+              </Pressable>
+              <Pressable
+                style={styles.botonAccionDireccion}
+                onPress={() => eliminarDireccion(direccionPerfilSeleccionada.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`Eliminar dirección ${direccionPerfilSeleccionada.etiqueta}`}
+              >
+                <Ionicons name="trash-outline" size={15} color="#b00020" />
+                <Text style={styles.eliminar}>Eliminar</Text>
+              </Pressable>
+            </View>
+          )}
+        </>
+      )}
+      {direcciones.length === 0 && (
+        <View style={styles.sinDirecciones}>
+          <Ionicons name="location-outline" size={22} color="#85858d" />
+          <Text style={styles.textoSinDirecciones}>Aún no tienes direcciones guardadas.</Text>
+        </View>
+      )}
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  contenedorTeclado: { flex: 1 },
   contenedor: {
     flexGrow: 1,
     paddingHorizontal: 18,
@@ -667,6 +767,18 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '800',
   },
+  botonSalirPerfil: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginLeft: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.55)',
+    borderRadius: 11,
+  },
+  textoSalirPerfil: { color: '#fff', fontSize: 11, fontWeight: '700' },
   inputPerfil: {
     minHeight: 44,
     paddingHorizontal: 11,
@@ -736,7 +848,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginTop: 10,
     marginBottom: 12,
+    paddingVertical: 5,
   },
+  controlesSeccionDirecciones: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   subtitulo: {
     marginTop: 6,
     marginBottom: 3,
@@ -755,6 +869,34 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffe7e9',
   },
   textoContador: { color: '#c90014', fontSize: 13, fontWeight: '800' },
+  selectorDirecciones: {
+    minHeight: 76,
+    marginBottom: 8,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1.5,
+    borderColor: '#c90014',
+    borderRadius: 16,
+    backgroundColor: '#fff',
+  },
+  opcionesDireccionesPerfil: {
+    marginBottom: 8,
+    padding: 5,
+    borderWidth: 1,
+    borderColor: '#eceef2',
+    borderRadius: 16,
+    backgroundColor: '#fff',
+  },
+  opcionDireccionPerfil: {
+    minHeight: 60,
+    padding: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+  },
+  opcionDireccionPerfilActiva: { backgroundColor: '#fff0f1' },
   sinDirecciones: {
     flexDirection: "row",
     alignItems: "center",
@@ -865,22 +1007,6 @@ const styles = StyleSheet.create({
   eliminar: {
     color: '#b00020',
     fontSize: 12,
-    fontWeight: '700',
-  },
-  botonSalir: {
-    minHeight: 50,
-    marginTop: 18,
-    marginBottom: 6,
-    padding: 13,
-    borderWidth: 1,
-    borderColor: '#e2e4e9',
-    backgroundColor: '#fff',
-    elevation: 0,
-    shadowOpacity: 0,
-  },
-  textoBotonSalir: {
-    color: '#50535e',
-    fontSize: 14,
     fontWeight: '700',
   },
 });

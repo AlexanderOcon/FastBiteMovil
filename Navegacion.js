@@ -160,6 +160,15 @@ function MainNavigation() {
     setProductosCarrito((actuales) => actuales.filter((item) => (item.id ?? item.nombre) !== id));
   };
 
+  const actualizarCantidadCarrito = (id, cantidad) => {
+    const cantidadValida = Math.max(1, Math.floor(Number(cantidad) || 1));
+    setProductosCarrito((actuales) => actuales.map((item) =>
+      (item.id ?? item.nombre) === id
+        ? { ...item, cantidad: cantidadValida }
+        : item,
+    ));
+  };
+
   const cerrarSesion = async () => {
     try {
       if (user) {
@@ -188,6 +197,7 @@ function MainNavigation() {
       productosCarrito,
       agregarAlCarrito,
       quitarDelCarrito,
+      actualizarCantidadCarrito,
       vaciarCarrito: () => setProductosCarrito([]),
       cerrarSesion,
     }}>
