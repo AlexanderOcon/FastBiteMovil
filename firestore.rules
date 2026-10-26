@@ -22,7 +22,7 @@ service cloud.firestore {
     }
 
     match /usuarios/{userId} {
-      allow get: if isOwner(userId);
+      allow get: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId)
         && request.resource.data.keys().hasAll(['username', 'email', 'telefono', 'role'])
         && request.resource.data.keys().hasOnly(['username', 'email', 'telefono', 'role'])

@@ -67,6 +67,9 @@ export default function Carrito({ navigation }) {
         })),
         total,
         usuarioId: user.uid,
+        usuarioNombre: perfilUsuario.exists()
+          ? perfilUsuario.data().username || user.displayName || ''
+          : user.displayName || '',
         correo: perfilUsuario.exists() ? perfilUsuario.data().email || '' : '',
         direccionEntrega: {
           etiqueta: direccionEntrega.etiqueta,
