@@ -30,7 +30,14 @@ service cloud.firestore {
         && request.resource.data.username is string
         && request.resource.data.email is string
         && request.resource.data.telefono is string;
-      allow list, update, delete: if false;
+      allow update: if isOwner(userId)
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['username', 'email', 'telefono'])
+        && request.resource.data.username is string
+        && request.resource.data.email is string
+        && request.resource.data.telefono is string;
+      allow list, delete: if false;
 
       match /carrito/{cartId} {
         allow read, write: if isOwner(userId);
@@ -39,6 +46,22 @@ service cloud.firestore {
       match /direcciones/{addressId} {
         allow read, write: if isOwner(userId);
       }
+    }
+
+    match /nombresUsuario/{username} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if signedIn()
+        && username.matches('^[a-z0-9_]{3,20}$')
+        && request.resource.data.keys().hasOnly(['uid', 'authEmail'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.authEmail == request.auth.token.email;
+      allow update: if signedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.authEmail == request.auth.token.email
+        && request.resource.data.keys().hasOnly(['uid', 'authEmail']);
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
     }
 
     match /pedido/{orderId} {

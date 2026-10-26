@@ -2,7 +2,7 @@ import { useContext, useEffect, useState } from 'react';
 import {ActivityIndicator,Alert,Pressable,ScrollView,StyleSheet,Text,TextInput,View,} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {createUserWithEmailAndPassword,deleteUser,signInWithEmailAndPassword,updateProfile,} from 'firebase/auth';
-import {addDoc,collection,deleteDoc,doc,onSnapshot,setDoc,updateDoc,} from 'firebase/firestore';
+import {addDoc,collection,deleteDoc,doc,getDoc,onSnapshot,setDoc,updateDoc,writeBatch,} from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { CarritoContext } from '../context/CarritoContext';
@@ -55,6 +55,7 @@ async function iniciarSesionAdmin() {
 
 const MENSAJES_POR_CODIGO = {
   'auth/email-already-in-use': 'Ese nombre de usuario ya está registrado.',
+  'auth/requires-recent-login': 'Por seguridad, cierra sesión e inicia sesión de nuevo antes de cambiar el nombre de usuario.',
   'auth/invalid-credential': 'El nombre de usuario o la contraseña no son correctos.',
   'auth/user-not-found': 'El nombre de usuario o la contraseña no son correctos.',
   'auth/wrong-password': 'El nombre de usuario o la contraseña no son correctos.',
@@ -83,7 +84,7 @@ function describirErrorDeAutenticacion(error) {
 }
 
 export default function Perfil() {
-  const { user, role } = useAuth();
+  const { user } = useAuth();
   const { cerrarSesion } = useContext(CarritoContext);
   const [modoRegistro, setModoRegistro] = useState(false);
   const [nombreUsuario, setNombreUsuario] = useState('');
@@ -92,6 +93,11 @@ export default function Perfil() {
   const [contrasena, setContrasena] = useState('');
   const [procesando, setProcesando] = useState(false);
   const [perfil, setPerfil] = useState(null);
+  const [editandoPerfil, setEditandoPerfil] = useState(false);
+  const [nombreUsuarioPerfil, setNombreUsuarioPerfil] = useState('');
+  const [correoPerfil, setCorreoPerfil] = useState('');
+  const [telefonoPerfil, setTelefonoPerfil] = useState('');
+  const [guardandoPerfil, setGuardandoPerfil] = useState(false);
   const [direcciones, setDirecciones] = useState([]);
   const [idDireccionEditando, setIdDireccionEditando] = useState(null);
   const [etiqueta, setEtiqueta] = useState('');
@@ -175,9 +181,16 @@ export default function Perfil() {
 
       // Inicio normal de sesión con un usuario que no es admin.
       if (!modoRegistro) {
-        const authEmail = identificador.includes('@')
-          ? identificador
-          : emailInternoDeUsuario(username);
+        let authEmail = identificador;
+        if (!identificador.includes('@')) {
+          const usernameSnapshot = await getDoc(doc(db, 'nombresUsuario', username));
+          const mappedAuthEmail = usernameSnapshot.exists()
+            ? usernameSnapshot.data().authEmail
+            : null;
+          authEmail = typeof mappedAuthEmail === 'string'
+            ? mappedAuthEmail
+            : emailInternoDeUsuario(username);
+        }
         await signInWithEmailAndPassword(auth, authEmail, contrasena);
         return;
       }
@@ -186,12 +199,18 @@ export default function Perfil() {
       const credential = await createUserWithEmailAndPassword(auth, authEmail, contrasena);
       cuentaNueva = credential.user;
       await updateProfile(credential.user, { displayName: username });
-      await setDoc(doc(db, 'usuarios', credential.user.uid), {
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'usuarios', credential.user.uid), {
         username,
         email,
         telefono: phone,
         role: 'user',
       });
+      batch.set(doc(db, 'nombresUsuario', username), {
+        uid: credential.user.uid,
+        authEmail,
+      });
+      await batch.commit();
     } catch (error) {
       console.error(modoRegistro ? 'Error creando cuenta:' : 'Error iniciando sesión:', error);
       if (cuentaNueva) {
@@ -215,6 +234,85 @@ export default function Perfil() {
     setDireccion('');
     setReferencia('');
     setTelefono('');
+  };
+
+  const editarPerfil = () => {
+    setNombreUsuarioPerfil(perfil?.username || user.displayName || '');
+    setCorreoPerfil(perfil?.email || '');
+    setTelefonoPerfil(perfil?.telefono || '');
+    setEditandoPerfil(true);
+  };
+
+  const guardarPerfil = async () => {
+    const username = nombreUsuarioPerfil.trim().toLowerCase();
+    const email = correoPerfil.trim().toLowerCase();
+    const phone = telefonoPerfil.trim();
+    if (!/^[a-z0-9_]{3,20}$/.test(username)) {
+      Alert.alert('Nombre de usuario inválido', 'Usa entre 3 y 20 letras, números o guiones bajos.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      Alert.alert('Correo inválido', 'Escribe un correo electrónico válido.');
+      return;
+    }
+    if (!/^[+\d\s()-]{7,20}$/.test(phone)) {
+      Alert.alert('Teléfono inválido', 'Escribe un teléfono válido de al menos 7 dígitos.');
+      return;
+    }
+
+    const usernameAnterior = perfil?.username || user.displayName || '';
+    setGuardandoPerfil(true);
+    try {
+      const usernameAnteriorNormalizado = usernameAnterior.toLowerCase();
+      let usernameAnteriorSnapshot = null;
+      if (username !== usernameAnterior.toLowerCase()) {
+        const usernameSnapshot = await getDoc(doc(db, 'nombresUsuario', username));
+        if (usernameSnapshot.exists() && usernameSnapshot.data().uid !== user.uid) {
+          Alert.alert('Nombre de usuario ocupado', 'Elige otro nombre de usuario.');
+          return;
+        }
+        usernameAnteriorSnapshot = await getDoc(doc(db, 'nombresUsuario', usernameAnteriorNormalizado));
+        if (usernameAnteriorSnapshot.exists() && usernameAnteriorSnapshot.data().uid !== user.uid) {
+          throw new Error('El nombre de usuario actual está vinculado a otra cuenta.');
+        }
+        await updateProfile(user, { displayName: username });
+      }
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'usuarios', user.uid), {
+        username,
+        email,
+        telefono: phone,
+      }, { merge: true });
+      if (username !== usernameAnteriorNormalizado) {
+        batch.set(doc(db, 'nombresUsuario', username), {
+          uid: user.uid,
+          authEmail: user.email,
+        });
+        if (usernameAnteriorSnapshot?.exists()) {
+          batch.delete(doc(db, 'nombresUsuario', usernameAnteriorNormalizado));
+        }
+      }
+      await batch.commit();
+      setEditandoPerfil(false);
+      Alert.alert('Perfil actualizado', 'Tus datos se guardaron correctamente.');
+    } catch (error) {
+      console.error('Error actualizando el perfil:', error);
+      if (username !== usernameAnterior.toLowerCase()) {
+        try {
+          await updateProfile(user, { displayName: usernameAnterior });
+        } catch (rollbackError) {
+          console.error('No se pudo restaurar el nombre de usuario anterior:', rollbackError);
+        }
+      }
+      const mensaje = error?.code === 'permission-denied'
+        ? 'Firebase rechazó la actualización. Publica las reglas actualizadas de Firestore y vuelve a intentarlo.'
+        : error?.code
+        ? describirErrorDeAutenticacion(error)
+        : error?.message || 'Verifica tu conexión y los permisos de Firestore.';
+      Alert.alert('No se pudo actualizar el perfil', mensaje);
+    } finally {
+      setGuardandoPerfil(false);
+    }
   };
 
   const guardarDireccion = async () => {
@@ -330,51 +428,104 @@ export default function Perfil() {
 
   return (
     <ScrollView contentContainerStyle={styles.contenedor}>
-      <View style={styles.encabezadoPerfil}>
-        <View style={styles.avatarPerfil}>
-          <Ionicons name="person" size={26} color="#fff" />
-        </View>
-        <View style={styles.encabezadoTexto}>
-          <Text style={styles.titulo}>Mi cuenta</Text>
-          <Text style={styles.subtituloEncabezado}>Tu perfil FastBite</Text>
-        </View>
-      </View>
       <View style={styles.tarjetaCuenta}>
         <View style={styles.identidadCuenta}>
           <View style={styles.avatarCuenta}>
-            <Ionicons name="person-outline" size={22} color="#ed0016" />
+            <Ionicons name="person-outline" size={22} color="#fff" />
           </View>
           <View style={styles.identidadTexto}>
-            <Text style={styles.nombreCuenta} numberOfLines={1}>
-              {perfil?.username || user.displayName || 'Cliente FastBite'}
-            </Text>
-            <View style={styles.insigniaRol}>
-              <Text style={styles.textoInsigniaRol}>
-                {role === 'admin' ? 'Administrador' : 'Cliente'}
+            {editandoPerfil ? (
+              <TextInput
+                style={styles.inputPerfil}
+                value={nombreUsuarioPerfil}
+                onChangeText={setNombreUsuarioPerfil}
+                placeholder="Nombre de usuario"
+                placeholderTextColor="#ffe0e3"
+                autoCapitalize="none"
+                autoCorrect={false}
+                maxLength={20}
+              />
+            ) : (
+              <Text style={styles.nombreCuenta} numberOfLines={1}>
+                {perfil?.username || user.displayName || 'Cliente FastBite'}
               </Text>
-            </View>
+            )}
           </View>
         </View>
         <View style={styles.separadorCuenta} />
         <View style={styles.filaDatoCuenta}>
-          <Ionicons name="call-outline" size={17} color="#ed0016" />
-          <Text style={styles.datoCuenta}>{perfil?.telefono || 'Teléfono no disponible'}</Text>
+          <Ionicons name="call-outline" size={17} color="#fff" />
+          {editandoPerfil ? (
+            <TextInput
+              style={styles.inputDatoPerfil}
+              value={telefonoPerfil}
+              onChangeText={setTelefonoPerfil}
+              placeholder="Teléfono"
+              placeholderTextColor="#ffe0e3"
+              keyboardType="phone-pad"
+            />
+          ) : (
+            <Text style={styles.datoCuenta}>{perfil?.telefono || 'Teléfono no disponible'}</Text>
+          )}
         </View>
         <View style={styles.filaDatoCuenta}>
-          <Ionicons name="mail-outline" size={17} color="#ed0016" />
-          <Text style={styles.datoCuenta} numberOfLines={1}>
-            {perfil?.email || 'Correo no disponible'}
-          </Text>
+          <Ionicons name="mail-outline" size={17} color="#fff" />
+          {editandoPerfil ? (
+            <TextInput
+              style={styles.inputDatoPerfil}
+              value={correoPerfil}
+              onChangeText={setCorreoPerfil}
+              placeholder="Correo electrónico"
+              placeholderTextColor="#ffe0e3"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          ) : (
+            <Text style={styles.datoCuenta} numberOfLines={1}>
+              {perfil?.email || 'Correo no disponible'}
+            </Text>
+          )}
         </View>
-      </View>
-
-      <View style={styles.metadataPerfil}>
-        <Ionicons name="shield-checkmark-outline" size={15} color="#85858d" />
-        <Text selectable style={styles.uid}>UID: {user.uid}</Text>
+        {editandoPerfil ? (
+          <View style={styles.accionesPerfil}>
+            <Pressable
+              style={styles.botonGuardarPerfil}
+              onPress={guardarPerfil}
+              disabled={guardandoPerfil}
+              accessibilityRole="button"
+            >
+              {guardandoPerfil
+                ? <ActivityIndicator size="small" color="#c90014" />
+                : <Text style={styles.textoBotonGuardarPerfil}>Guardar cambios</Text>}
+            </Pressable>
+            <Pressable
+              style={styles.botonCancelarPerfil}
+              onPress={() => setEditandoPerfil(false)}
+              disabled={guardandoPerfil}
+              accessibilityRole="button"
+            >
+              <Text style={styles.textoBotonCancelarPerfil}>Cancelar</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable
+            style={styles.botonEditarPerfil}
+            onPress={editarPerfil}
+            accessibilityRole="button"
+            accessibilityLabel="Editar datos del perfil"
+          >
+            <Ionicons name="create-outline" size={16} color="#fff" />
+            <Text style={styles.textoBotonEditarPerfil}>Editar datos</Text>
+          </Pressable>
+        )}
       </View>
 
       <View style={styles.encabezadoSeccion}>
-        <Text style={styles.subtitulo}>Mis direcciones</Text>
+        <View>
+          <Text style={styles.subtitulo}>Mis direcciones</Text>
+          <Text style={styles.descripcionSeccion}>Lugares donde recibes tus pedidos</Text>
+        </View>
         <View style={styles.contadorDirecciones}>
           <Text style={styles.textoContador}>{direcciones.length}</Text>
         </View>
@@ -421,9 +572,12 @@ export default function Perfil() {
         </View>
       ))}
 
-      <Text style={styles.subtitulo}>
-        {idDireccionEditando ? 'Editar dirección' : 'Agregar dirección'}
-      </Text>
+      <View style={styles.encabezadoFormulario}>
+        <Text style={styles.subtitulo}>
+          {idDireccionEditando ? 'Editar dirección' : 'Agregar dirección'}
+        </Text>
+        <Text style={styles.descripcionSeccion}>Completa los datos para tu entrega</Text>
+      </View>
       <View style={styles.formularioDireccion}>
         <TextInput
           style={styles.input}
@@ -473,215 +627,260 @@ export default function Perfil() {
 const styles = StyleSheet.create({
   contenedor: {
     flexGrow: 1,
-    padding: 20,
-    paddingBottom: 32,
-    backgroundColor: "#f7f7f7",
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 36,
+    backgroundColor: '#f5f6f8',
   },
-  encabezadoPerfil: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 18,
-    marginBottom: 14,
-  },
-  avatarPerfil: {
-    width: 48,
-    height: 48,
-    marginRight: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 24,
-    backgroundColor: "#ed0016",
-  },
-  encabezadoTexto: { flex: 1 },
   titulo: {
     marginBottom: 2,
-    color: "#29292e",
+    color: '#29292e',
     fontSize: 25,
-    fontWeight: "800",
+    fontWeight: '800',
   },
-  subtituloEncabezado: { color: "#85858d", fontSize: 13 },
-  descripcion: { marginBottom: 18, color: "#666", fontSize: 15 },
+  descripcion: { marginBottom: 18, color: '#626570', fontSize: 15, lineHeight: 22 },
   tarjetaCuenta: {
+    marginTop: 40,
     marginBottom: 14,
-    padding: 16,
-    borderRadius: 16,
-    backgroundColor: "#fff",
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
+    padding: 18,
+    borderRadius: 22,
+    backgroundColor: '#ed0016',
+    elevation: 5,
+    shadowColor: '#a30010',
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
   },
   identidadCuenta: { flexDirection: "row", alignItems: "center" },
   avatarCuenta: {
-    width: 42,
-    height: 42,
-    marginRight: 12,
+    width: 48,
+    height: 48,
+    marginRight: 13,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 21,
-    backgroundColor: "#fff0f1",
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.2)',
   },
   identidadTexto: { flex: 1 },
   nombreCuenta: {
-    marginBottom: 5,
-    color: "#29292e",
+    color: '#fff',
     fontSize: 17,
-    fontWeight: "700",
+    fontWeight: '800',
   },
-  insigniaRol: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: 10,
-    backgroundColor: "#fff0f1",
+  inputPerfil: {
+    minHeight: 44,
+    paddingHorizontal: 11,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.45)',
+    borderRadius: 11,
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
   },
-  textoInsigniaRol: { color: "#c90014", fontSize: 11, fontWeight: "700" },
   separadorCuenta: {
     height: 1,
-    marginVertical: 13,
-    backgroundColor: "#f0f0f2",
+    marginVertical: 16,
+    backgroundColor: 'rgba(255,255,255,0.28)',
   },
   filaDatoCuenta: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 9,
-    marginTop: 8,
+    gap: 11,
+    marginTop: 10,
   },
-  datoCuenta: { flex: 1, color: "#555", fontSize: 13 },
-  metadataPerfil: {
-    flexDirection: "row",
-    alignItems: "center",
+  datoCuenta: { flex: 1, color: '#fff', fontSize: 13 },
+  inputDatoPerfil: {
+    flex: 1,
+    minHeight: 42,
+    paddingHorizontal: 11,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.45)',
+    borderRadius: 11,
+    color: '#fff',
+    fontSize: 13,
+  },
+  botonEditarPerfil: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
-    marginBottom: 8,
+    marginTop: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.55)',
+    borderRadius: 12,
   },
-  uid: { flex: 1, color: "#85858d", fontSize: 11 },
+  textoBotonEditarPerfil: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  accionesPerfil: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 16,
+  },
+  botonGuardarPerfil: {
+    minHeight: 40,
+    minWidth: 130,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+  },
+  textoBotonGuardarPerfil: { color: '#c90014', fontSize: 12, fontWeight: '800' },
+  botonCancelarPerfil: { paddingHorizontal: 8, paddingVertical: 10 },
+  textoBotonCancelarPerfil: { color: '#fff', fontSize: 12, fontWeight: '700' },
   encabezadoSeccion: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 12,
-    marginBottom: 10,
+    marginTop: 10,
+    marginBottom: 12,
   },
   subtitulo: {
-    marginTop: 8,
-    marginBottom: 10,
-    color: "#29292e",
+    marginTop: 6,
+    marginBottom: 3,
+    color: '#242630',
     fontSize: 18,
-    fontWeight: "700",
+    fontWeight: '800',
   },
+  descripcionSeccion: { color: '#858995', fontSize: 12, lineHeight: 17 },
+  encabezadoFormulario: { marginTop: 4, marginBottom: 10 },
   contadorDirecciones: {
-    minWidth: 26,
-    height: 26,
+    minWidth: 32,
+    height: 32,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 13,
-    backgroundColor: "#fff0f1",
+    borderRadius: 16,
+    backgroundColor: '#ffe7e9',
   },
-  textoContador: { color: "#c90014", fontSize: 12, fontWeight: "700" },
+  textoContador: { color: '#c90014', fontSize: 13, fontWeight: '800' },
   sinDirecciones: {
     flexDirection: "row",
     alignItems: "center",
     gap: 9,
-    marginBottom: 10,
-    padding: 14,
-    borderRadius: 12,
-    backgroundColor: "#fff",
+    marginBottom: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#eceef2',
+    borderRadius: 16,
+    backgroundColor: '#fff',
   },
-  textoSinDirecciones: { color: "#777", fontSize: 13 },
+  textoSinDirecciones: { flex: 1, color: '#777b86', fontSize: 13 },
   tarjetaDireccion: {
-    marginBottom: 10,
-    padding: 14,
+    marginBottom: 12,
+    padding: 16,
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 10,
-    borderRadius: 14,
-    backgroundColor: "#fff",
-    elevation: 1,
-    shadowColor: "#000",
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#eceef2',
+    borderRadius: 18,
+    backgroundColor: '#fff',
+    elevation: 2,
+    shadowColor: '#222',
     shadowOpacity: 0.04,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 7,
+    shadowOffset: { width: 0, height: 3 },
   },
   iconoDireccion: {
-    width: 36,
-    height: 36,
+    width: 42,
+    height: 42,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 18,
-    backgroundColor: "#fff0f1",
+    borderRadius: 15,
+    backgroundColor: '#fff0f1',
   },
   detalleDireccion: { flex: 1 },
   nombreDireccion: {
     marginBottom: 5,
-    color: "#29292e",
+    color: '#242630',
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: '800',
   },
-  textoDireccion: { color: "#444", fontSize: 13, lineHeight: 19 },
-  secundario: { marginTop: 4, color: "#85858d", fontSize: 12 },
-  accionesDireccion: { flexDirection: "row", gap: 16, marginTop: 10 },
+  textoDireccion: { color: '#50535e', fontSize: 13, lineHeight: 19 },
+  secundario: { marginTop: 5, color: '#858995', fontSize: 12 },
+  accionesDireccion: { flexDirection: "row", gap: 18, marginTop: 13 },
   botonAccionDireccion: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingVertical: 3,
+    gap: 5,
+    paddingVertical: 5,
   },
   input: {
-    marginBottom: 10,
-    paddingHorizontal: 13,
-    paddingVertical: 12,
+    minHeight: 50,
+    marginBottom: 11,
+    paddingHorizontal: 15,
+    paddingVertical: 13,
     borderWidth: 1,
-    borderColor: "#eeeeF0",
-    borderRadius: 10,
-    backgroundColor: "#f9f9fa",
-    color: "#222",
+    borderColor: '#e8eaf0',
+    borderRadius: 13,
+    backgroundColor: '#f8f9fb',
+    color: '#242630',
     fontSize: 14,
   },
   formularioDireccion: {
-    padding: 14,
-    borderRadius: 15,
-    backgroundColor: "#fff",
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#eceef2',
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    elevation: 2,
+    shadowColor: '#222',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
   },
   boton: {
+    minHeight: 52,
     marginVertical: 6,
-    padding: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    borderRadius: 11,
-    backgroundColor: "#ed0016",
+    borderRadius: 14,
+    backgroundColor: '#ed0016',
+    elevation: 2,
+    shadowColor: '#c90014',
+    shadowOpacity: 0.18,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 3 },
   },
   botonTexto: {
-    color: "#fff",
+    color: '#fff',
     fontSize: 15,
-    fontWeight: "700",
+    fontWeight: '800',
   },
   enlace: {
-    color: "#ed0016",
+    color: '#c90014',
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: '800',
   },
   botonCancelar: {
     alignSelf: "center",
-    paddingVertical: 8,
+    paddingVertical: 10,
   },
   eliminar: {
-    color: "#b00020",
+    color: '#b00020',
     fontSize: 12,
-    fontWeight: "600",
+    fontWeight: '700',
   },
   botonSalir: {
-    marginTop: 20,
+    minHeight: 50,
+    marginTop: 18,
+    marginBottom: 6,
     padding: 13,
     borderWidth: 1,
-    borderColor: "#dedee2",
-    backgroundColor: "#fff",
+    borderColor: '#e2e4e9',
+    backgroundColor: '#fff',
+    elevation: 0,
+    shadowOpacity: 0,
   },
   textoBotonSalir: {
-    color: "#555",
+    color: '#50535e',
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: '700',
   },
 });
