@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase/config';
 
 function formatearPrecio(valor) {
-  const precio = Number(valor);
+  const precio = Math.trunc(Number(valor));
   return `C$${Number.isFinite(precio) ? precio.toLocaleString('es-NI') : '0'}`;
 }
 

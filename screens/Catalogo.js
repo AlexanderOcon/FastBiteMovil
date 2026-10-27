@@ -158,7 +158,7 @@ export default function Catalogo({ navigation }) {
                       {producto.precio !== undefined &&
                       producto.precio !== null &&
                       producto.precio !== ''
-                        ? `C$${producto.precio}`
+                        ? `C$${Math.trunc(Number(producto.precio) || 0).toLocaleString('es-NI')}`
                         : 'Ver producto'}
                     </Text>
                   </View>

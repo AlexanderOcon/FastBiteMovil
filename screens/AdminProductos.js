@@ -1,12 +1,26 @@
 import { useEffect, useState } from 'react';
 import { useContext } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Alert,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { addDoc, collection, deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { CarritoContext } from '../context/CarritoContext';
+import { eliminarImagenProducto, subirImagenProducto } from '../services/supabaseStorage';
 
 // Define el estado inicial del formulario para agregar o editar un producto.
+const categoriasDisponibles = ['Alitas', 'Hamburguesas', 'Papas', 'Bebidas'];
+
 const formularioVacio = {
   nombre: '',
   categoria: '',
@@ -15,6 +29,18 @@ const formularioVacio = {
   descripcion: '',
   rating: '5.0',
 };
+
+function formatearPrecioCordoba(valor) {
+  const precio = Math.trunc(Number(valor));
+  return `C$${Number.isFinite(precio) ? precio.toLocaleString('es-NI') : '0'}`;
+}
+
+function formatearPrecioInput(valor) {
+  const numero = `${valor ?? ''}`.replace(/[^\d]/g, '');
+  if (!numero) return '';
+  const precio = Number(numero);
+  return `C$ ${Number.isFinite(precio) ? precio.toLocaleString('es-NI') : numero}`;
+}
 
 // Convierte un valor que venga como objeto, arreglo o número a un texto seguro para mostrarse en pantalla.
 function textoSeguro(valor) {
@@ -34,6 +60,9 @@ export default function AdminProductos({ navigation }) {
   const [formulario, setFormulario] = useState(formularioVacio);
   const [idEditando, setIdEditando] = useState(null);
   const [guardando, setGuardando] = useState(false);
+  const [busqueda, setBusqueda] = useState('');
+  const [imagenSeleccionada, setImagenSeleccionada] = useState(null);
+  const [mostrarCategorias, setMostrarCategorias] = useState(false);
 
   useEffect(() => onSnapshot(
     collection(db, 'productos'),
@@ -53,28 +82,76 @@ export default function AdminProductos({ navigation }) {
   const limpiarFormulario = () => {
     setIdEditando(null);
     setFormulario(formularioVacio);
+    setImagenSeleccionada(null);
+  };
+
+  const seleccionarImagen = async () => {
+    try {
+      const resultado = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (resultado.canceled) return;
+
+      const imagen = resultado.assets[0];
+      if (!imagen) {
+        Alert.alert('No se pudo seleccionar la imagen', 'Vuelve a elegir el archivo.');
+        return;
+      }
+
+      const tipoMime = imagen.mimeType || imagen.file?.type || 'image/jpeg';
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(tipoMime)) {
+        Alert.alert('Formato no compatible', 'Selecciona una imagen JPG, PNG o WebP.');
+        return;
+      }
+      const tamanoBase64 = imagen.base64
+        ? Math.floor((imagen.base64.length * 3) / 4)
+          - (imagen.base64.endsWith('==') ? 2 : imagen.base64.endsWith('=') ? 1 : 0)
+        : 0;
+      if (tamanoBase64 > 8 * 1024 * 1024) {
+        Alert.alert('Imagen demasiado grande', 'Selecciona una imagen que pese menos de 8 MB.');
+        return;
+      }
+
+      setImagenSeleccionada(imagen);
+    } catch (error) {
+      console.error('Error seleccionando imagen del producto:', error);
+      Alert.alert('No se pudo abrir la galería', 'Inténtalo de nuevo y verifica los permisos del dispositivo.');
+    }
   };
 
   // Guarda un producto nuevo o actualiza el actual en Firestore.
   const guardarProducto = async () => {
-    const precio = Number(formulario.precio);
-    if (!formulario.nombre.trim() || !formulario.categoria.trim() || !formulario.imagen.trim()
+    const precio = Math.trunc(Number(formulario.precio));
+    if (!formulario.nombre.trim() || !formulario.categoria.trim()
+      || (!imagenSeleccionada && !formulario.imagen.trim())
       || !formulario.descripcion.trim() || !Number.isFinite(precio) || precio <= 0) {
       Alert.alert('Revisa el formulario', 'Completa nombre, categoría, precio válido, imagen y descripción.');
       return;
     }
 
-    const datos = {
-      nombre: formulario.nombre.trim(),
-      categoria: formulario.categoria.trim(),
-      precio,
-      imagen: formulario.imagen.trim(),
-      descripcion: formulario.descripcion.trim(),
-      rating: formulario.rating.trim() || '5.0',
-    };
-
     setGuardando(true);
+    let imagenSubida = null;
     try {
+      let urlImagen = formulario.imagen.trim();
+      if (imagenSeleccionada) {
+        imagenSubida = await subirImagenProducto(imagenSeleccionada);
+        urlImagen = imagenSubida.url;
+      }
+
+      const datos = {
+        nombre: formulario.nombre.trim(),
+        categoria: formulario.categoria.trim(),
+        precio,
+        imagen: urlImagen,
+        descripcion: formulario.descripcion.trim(),
+        rating: formulario.rating.trim() || '5.0',
+      };
+
       if (idEditando) {
         await updateDoc(doc(db, 'productos', idEditando), datos);
       } else {
@@ -82,8 +159,15 @@ export default function AdminProductos({ navigation }) {
       }
       limpiarFormulario();
     } catch (error) {
+      if (imagenSubida) {
+        try {
+          await eliminarImagenProducto(imagenSubida.path);
+        } catch (errorLimpieza) {
+          console.error('No se pudo limpiar la imagen tras fallar el guardado del producto:', errorLimpieza);
+        }
+      }
       console.error('Error guardando producto:', error);
-      Alert.alert('No se pudo guardar', 'Confirma que este usuario tiene el rol admin en Firestore.');
+      Alert.alert('No se pudo guardar', error.message || 'Verifica la configuración de Supabase y los permisos de Firestore.');
     } finally {
       setGuardando(false);
     }
@@ -92,10 +176,11 @@ export default function AdminProductos({ navigation }) {
   // Carga un producto ya existente para editarlo en el formulario.
   const cargarParaEditar = (producto) => {
     setIdEditando(producto.id);
+    setImagenSeleccionada(null);
     setFormulario({
       nombre: textoSeguro(producto.nombre || ''),
       categoria: textoSeguro(producto.categoria || producto.categoria_id?.nombre || producto.categoria_id || ''),
-      precio: String(producto.precio ?? ''),
+      precio: String(Math.trunc(Number(producto.precio) || 0)),
       imagen: textoSeguro(producto.imagen || producto.image || ''),
       descripcion: textoSeguro(producto.descripcion || ''),
       rating: String(producto.rating || producto.calificacion || '5.0'),
@@ -121,74 +206,339 @@ export default function AdminProductos({ navigation }) {
     ]);
   };
 
+  const productosFiltrados = productos.filter((producto) => {
+    const textoProducto = [
+      producto.nombre,
+      producto.categoria?.nombre || producto.categoria_id?.nombre || producto.categoria_id || producto.categoria,
+      producto.descripcion,
+    ].map((valor) => textoSeguro(valor)).join(' ').toLowerCase();
+    return textoProducto.includes(busqueda.trim().toLowerCase());
+  });
+
   return (
     <ScrollView contentContainerStyle={styles.contenedor}>
       <View style={styles.encabezado}>
-        <View>
-          <Text style={styles.titulo}>Administrar productos</Text>
-          <Text style={styles.usuario}>{user?.displayName || 'Administrador'}</Text>
-          <Text style={styles.usuario}>{user?.email}</Text>
-          <Text selectable style={styles.uid}>UID: {user?.uid}</Text>
+        <View style={styles.encabezadoTexto}>
+          <Text style={styles.etiquetaEncabezado}>FASTBITE · ADMINISTRACIÓN</Text>
+          <Text style={styles.titulo}>Productos</Text>
+          <Text style={styles.descripcion}>Gestiona los productos de tu menú.</Text>
         </View>
-        <Pressable onPress={cerrarSesion}>
-          <Text style={styles.enlace}>Salir</Text>
+        <Pressable
+          style={styles.botonSalir}
+          onPress={cerrarSesion}
+          accessibilityRole="button"
+          accessibilityLabel="Cerrar sesión"
+        >
+          <Ionicons name="log-out-outline" size={17} color="#c90014" />
+          <Text style={styles.textoSalir}>Salir</Text>
         </Pressable>
       </View>
 
-      <Text style={styles.subtitulo}>{idEditando ? 'Actualizar producto' : 'Agregar producto'}</Text>
-      <TextInput style={styles.input} value={formulario.nombre} onChangeText={(value) => actualizarCampo('nombre', value)} placeholder="Nombre" />
-      <TextInput style={styles.input} value={formulario.categoria} onChangeText={(value) => actualizarCampo('categoria', value)} placeholder="Categoría (Alitas, Papas...)" />
-      <TextInput style={styles.input} value={formulario.precio} onChangeText={(value) => actualizarCampo('precio', value)} placeholder="Precio en córdobas" keyboardType="decimal-pad" />
-      <TextInput style={styles.input} value={formulario.imagen} onChangeText={(value) => actualizarCampo('imagen', value)} placeholder="URL de la imagen" autoCapitalize="none" />
-      <TextInput style={[styles.input, styles.multilinea]} value={formulario.descripcion} onChangeText={(value) => actualizarCampo('descripcion', value)} placeholder="Descripción" multiline />
-      <TextInput style={styles.input} value={formulario.rating} onChangeText={(value) => actualizarCampo('rating', value)} placeholder="Calificación (opcional)" keyboardType="decimal-pad" />
-      <Pressable style={[styles.boton, guardando && styles.deshabilitado]} onPress={guardarProducto} disabled={guardando}>
-        <Text style={styles.botonTexto}>{guardando ? 'Guardando...' : idEditando ? 'Guardar cambios' : 'Agregar producto'}</Text>
-      </Pressable>
-      {idEditando && (
-        <Pressable onPress={limpiarFormulario}>
-          <Text style={styles.enlace}>Cancelar edición</Text>
-        </Pressable>
-      )}
+      <View style={styles.resumen}>
+        <View style={styles.iconoResumen}>
+          <Ionicons name="fast-food-outline" size={22} color="#ed0016" />
+        </View>
+        <View style={styles.detalleResumen}>
+          <Text style={styles.totalResumen}>{productos.length}</Text>
+          <Text style={styles.textoResumen}>productos en el menú</Text>
+        </View>
+        <View style={styles.etiquetaMenu}>
+          <Ionicons name="restaurant-outline" size={14} color="#c90014" />
+          <Text style={styles.textoEtiquetaMenu}>Menú</Text>
+        </View>
+      </View>
 
-      <Text style={styles.subtitulo}>Productos actuales ({productos.length})</Text>
-      {productos.map((producto) => {
+      <View style={styles.formulario}>
+        <View style={styles.tituloFormularioFila}>
+          <View style={styles.iconoFormulario}>
+            <Ionicons name={idEditando ? 'create-outline' : 'add-outline'} size={19} color="#ed0016" />
+          </View>
+          <View style={styles.detalleTituloFormulario}>
+            <Text style={styles.subtitulo}>{idEditando ? 'Editar producto' : 'Agregar producto'}</Text>
+            <Text style={styles.ayudaFormulario}>Completa los datos para actualizar tu menú.</Text>
+          </View>
+        </View>
+
+        <Text style={styles.etiquetaCampo}>Nombre</Text>
+        <TextInput
+          style={styles.input}
+          value={formulario.nombre}
+          onChangeText={(value) => actualizarCampo('nombre', value)}
+          placeholder="Ej. Alitas BBQ"
+          placeholderTextColor="#999"
+          accessibilityLabel="Nombre del producto"
+        />
+        <Text style={styles.etiquetaCampo}>Categoría</Text>
+        <Pressable
+          style={styles.selectorCategoria}
+          onPress={() => setMostrarCategorias((actual) => !actual)}
+          accessibilityRole="button"
+          accessibilityLabel="Seleccionar categoría del producto"
+        >
+          <Text style={[styles.textoSelectorCategoria, !formulario.categoria && styles.textoSelectorCategoriaVacio]}>
+            {formulario.categoria || 'Selecciona una categoría'}
+          </Text>
+          <Ionicons name={mostrarCategorias ? 'chevron-up-outline' : 'chevron-down-outline'} size={18} color="#858995" />
+        </Pressable>
+
+        {mostrarCategorias && (
+          <View style={styles.menuCategorias}>
+            {categoriasDisponibles.map((categoria) => (
+              <Pressable
+                key={categoria}
+                style={[styles.opcionCategoria, formulario.categoria === categoria && styles.opcionCategoriaActiva]}
+                onPress={() => {
+                  actualizarCampo('categoria', categoria);
+                  setMostrarCategorias(false);
+                }}
+              >
+                <Text style={[styles.textoOpcionCategoria, formulario.categoria === categoria && styles.textoOpcionCategoriaActiva]}>{categoria}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+
+        <Text style={styles.etiquetaCampo}>Precio en córdobas</Text>
+        <TextInput
+          style={styles.input}
+          value={formatearPrecioInput(formulario.precio)}
+          onChangeText={(value) => actualizarCampo('precio', `${value ?? ''}`.replace(/[^\d]/g, ''))}
+          placeholder="C$ 180"
+          placeholderTextColor="#999"
+          keyboardType="numeric"
+          accessibilityLabel="Precio en córdobas"
+        />
+        <Text style={styles.etiquetaCampo}>Imagen del producto</Text>
+        <View style={styles.selectorImagen}>
+          {(imagenSeleccionada?.uri || formulario.imagen) ? (
+            <Image
+              source={{ uri: imagenSeleccionada?.uri || formulario.imagen }}
+              style={styles.vistaPreviaImagen}
+            />
+          ) : (
+            <View style={styles.iconoImagenVacia}>
+              <Ionicons name="image-outline" size={25} color="#ed0016" />
+            </View>
+          )}
+          <View style={styles.detalleImagen}>
+            <Text style={styles.nombreImagen} numberOfLines={1}>
+              {imagenSeleccionada?.fileName || (imagenSeleccionada ? 'Imagen lista para subir' : formulario.imagen ? 'Imagen actual del producto' : 'Sin imagen seleccionada')}
+            </Text>
+            <Text style={styles.ayudaImagen}>JPG, PNG o WebP · máximo 8 MB</Text>
+            <Pressable
+              style={styles.botonImagen}
+              onPress={seleccionarImagen}
+              disabled={guardando}
+              accessibilityRole="button"
+              accessibilityLabel={formulario.imagen || imagenSeleccionada ? 'Cambiar imagen del producto' : 'Seleccionar imagen del producto'}
+            >
+              <Ionicons name="cloud-upload-outline" size={16} color="#c90014" />
+              <Text style={styles.textoBotonImagen}>
+                {imagenSeleccionada || formulario.imagen ? 'Cambiar imagen' : 'Seleccionar imagen'}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+        <Text style={styles.etiquetaCampo}>Descripción</Text>
+        <TextInput
+          style={[styles.input, styles.multilinea]}
+          value={formulario.descripcion}
+          onChangeText={(value) => actualizarCampo('descripcion', value)}
+          placeholder="Describe brevemente el producto"
+          placeholderTextColor="#999"
+          multiline
+          accessibilityLabel="Descripción del producto"
+        />
+        <Text style={styles.etiquetaCampo}>Calificación (opcional)</Text>
+        <TextInput
+          style={styles.input}
+          value={formulario.rating}
+          onChangeText={(value) => actualizarCampo('rating', value)}
+          placeholder="5.0"
+          placeholderTextColor="#999"
+          keyboardType="decimal-pad"
+          accessibilityLabel="Calificación del producto"
+        />
+        <Pressable
+          style={[styles.boton, guardando && styles.deshabilitado]}
+          onPress={guardarProducto}
+          disabled={guardando}
+          accessibilityRole="button"
+        >
+          <Ionicons name={idEditando ? 'save-outline' : 'add-circle-outline'} size={19} color="#fff" />
+          <Text style={styles.botonTexto}>
+            {guardando ? 'Guardando...' : idEditando ? 'Guardar cambios' : 'Agregar producto'}
+          </Text>
+        </Pressable>
+        {idEditando && (
+          <Pressable
+            style={styles.botonCancelarEdicion}
+            onPress={limpiarFormulario}
+            accessibilityRole="button"
+          >
+            <Text style={styles.textoCancelarEdicion}>Cancelar edición</Text>
+          </Pressable>
+        )}
+      </View>
+
+      <View style={styles.encabezadoLista}>
+        <View style={styles.encabezadoListaTexto}>
+          <Text style={styles.subtituloLista}>Productos actuales</Text>
+          <Text style={styles.cantidadLista}>{productos.length} en total</Text>
+        </View>
+      </View>
+
+      <View style={styles.buscador}>
+        <Ionicons name="search-outline" size={18} color="#858995" />
+        <TextInput
+          style={styles.inputBusqueda}
+          value={busqueda}
+          onChangeText={setBusqueda}
+          placeholder="Buscar por nombre o categoría"
+          placeholderTextColor="#999"
+          accessibilityLabel="Buscar productos por nombre o categoría"
+          returnKeyType="search"
+        />
+        {busqueda.length > 0 && (
+          <Pressable
+            onPress={() => setBusqueda('')}
+            accessibilityRole="button"
+            accessibilityLabel="Limpiar búsqueda"
+          >
+            <Ionicons name="close-circle" size={18} color="#858995" />
+          </Pressable>
+        )}
+      </View>
+
+      {productosFiltrados.length === 0 ? (
+        <View style={styles.vacio}>
+          <View style={styles.iconoVacio}>
+            <Ionicons
+              name={productos.length === 0 ? 'fast-food-outline' : 'search-outline'}
+              size={30}
+              color="#ed0016"
+            />
+          </View>
+          <Text style={styles.tituloVacio}>
+            {productos.length === 0 ? 'Aún no hay productos' : 'No encontramos productos'}
+          </Text>
+          <Text style={styles.textoVacio}>
+            {productos.length === 0
+              ? 'Agrega el primer producto para mostrarlo en el menú.'
+              : 'Prueba con otro nombre o categoría.'}
+          </Text>
+        </View>
+      ) : (
+        productosFiltrados.map((producto) => {
         const nombre = textoSeguro(producto.nombre || '');
-        const categoria = textoSeguro(producto.categoria || producto.categoria_id || '');
+        const categoria = textoSeguro(producto.categoria?.nombre || producto.categoria_id?.nombre || producto.categoria_id || producto.categoria || '');
         const precio = textoSeguro(producto.precio ?? '');
+        const imagen = textoSeguro(producto.imagen || producto.image || '');
 
         return (
           <View key={producto.id} style={styles.producto}>
+            {imagen ? (
+              <Image source={{ uri: imagen }} style={styles.imagenProducto} />
+            ) : (
+              <View style={[styles.imagenProducto, styles.imagenVacia]}>
+                <Ionicons name="fast-food-outline" size={23} color="#ed0016" />
+              </View>
+            )}
             <View style={styles.detalle}>
-              <Text style={styles.nombre}>{nombre}</Text>
-              <Text style={styles.secundario}>{categoria ? `${categoria} · C$${precio}` : `C$${precio}`}</Text>
+              <Text style={styles.nombre} numberOfLines={1}>{nombre}</Text>
+              {!!categoria && <Text style={styles.secundario} numberOfLines={1}>{categoria}</Text>}
+              <Text style={styles.precio}>{formatearPrecioCordoba(producto.precio)}</Text>
             </View>
-            <Pressable onPress={() => cargarParaEditar(producto)}><Text style={styles.enlace}>Editar</Text></Pressable>
-            <Pressable onPress={() => confirmarEliminacion(producto)}><Text style={styles.eliminar}>Borrar</Text></Pressable>
+            <View style={styles.accionesProducto}>
+              <Pressable
+                style={styles.botonEditar}
+                onPress={() => cargarParaEditar(producto)}
+                accessibilityRole="button"
+                accessibilityLabel={`Editar ${nombre}`}
+              >
+                <Ionicons name="create-outline" size={17} color="#c90014" />
+              </Pressable>
+              <Pressable
+                style={styles.botonEliminar}
+                onPress={() => confirmarEliminacion(producto)}
+                accessibilityRole="button"
+                accessibilityLabel={`Eliminar ${nombre}`}
+              >
+                <Ionicons name="trash-outline" size={17} color="#b42318" />
+              </Pressable>
+            </View>
           </View>
         );
-      })}
+        })
+      )}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  contenedor: { flexGrow: 1, padding: 20, backgroundColor: '#f7f7f7' },
-  encabezado: { marginBottom: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  titulo: { color: '#29292e', fontSize: 23, fontWeight: '800' },
-  usuario: { marginTop: 4, color: '#666' },
-  uid: { marginTop: 4, color: '#777', fontSize: 11 },
-  subtitulo: { marginTop: 12, marginBottom: 10, color: '#29292e', fontSize: 18, fontWeight: '700' },
-  input: { marginBottom: 10, padding: 12, borderRadius: 9, backgroundColor: '#fff', color: '#222' },
-  multilinea: { minHeight: 76, textAlignVertical: 'top' },
-  boton: { marginVertical: 6, padding: 14, alignItems: 'center', borderRadius: 10, backgroundColor: '#ed0016' },
-  botonTexto: { color: '#fff', fontWeight: '700' },
+  contenedor: { flexGrow: 1, paddingHorizontal: 18, paddingTop: 48, paddingBottom: 24, backgroundColor: '#f5f6f8' },
+  encabezado: { marginBottom: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  encabezadoTexto: { flex: 1 },
+  etiquetaEncabezado: { marginBottom: 4, color: '#c90014', fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+  titulo: { color: '#242630', fontSize: 25, fontWeight: '800' },
+  descripcion: { marginTop: 6, color: '#777b86', fontSize: 13, lineHeight: 18 },
+  botonSalir: { minHeight: 40, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: '#ffe0e3', borderRadius: 13, backgroundColor: '#fff' },
+  textoSalir: { color: '#c90014', fontSize: 12, fontWeight: '800' },
+  resumen: { minHeight: 76, marginBottom: 16, padding: 14, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#eceef2', borderRadius: 18, backgroundColor: '#fff', elevation: 2, shadowColor: '#222', shadowOpacity: 0.04, shadowRadius: 7, shadowOffset: { width: 0, height: 2 } },
+  iconoResumen: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 15, backgroundColor: '#ffe7e9' },
+  detalleResumen: { flex: 1, marginLeft: 11 },
+  totalResumen: { color: '#242630', fontSize: 19, fontWeight: '900' },
+  textoResumen: { marginTop: 2, color: '#777b86', fontSize: 11 },
+  etiquetaMenu: { paddingHorizontal: 10, paddingVertical: 7, flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 11, backgroundColor: '#fff0f1' },
+  textoEtiquetaMenu: { color: '#c90014', fontSize: 11, fontWeight: '800' },
+  formulario: { marginBottom: 20, padding: 16, borderWidth: 1, borderColor: '#eceef2', borderRadius: 18, backgroundColor: '#fff', elevation: 2, shadowColor: '#222', shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
+  tituloFormularioFila: { marginBottom: 16, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  iconoFormulario: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: '#fff0f1' },
+  detalleTituloFormulario: { flex: 1 },
+  subtitulo: { color: '#242630', fontSize: 16, fontWeight: '800' },
+  ayudaFormulario: { marginTop: 3, color: '#858995', fontSize: 11 },
+  etiquetaCampo: { marginBottom: 6, color: '#50535e', fontSize: 11, fontWeight: '700' },
+  input: { minHeight: 44, marginBottom: 12, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#eceef2', borderRadius: 12, backgroundColor: '#f8f8fa', color: '#242630', fontSize: 13 },
+  selectorCategoria: { minHeight: 44, marginBottom: 12, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: '#eceef2', borderRadius: 12, backgroundColor: '#f8f8fa' },
+  textoSelectorCategoria: { color: '#242630', fontSize: 13, fontWeight: '600' },
+  textoSelectorCategoriaVacio: { color: '#999' },
+  menuCategorias: { marginTop: -4, marginBottom: 12, borderWidth: 1, borderColor: '#eceef2', borderRadius: 12, backgroundColor: '#fff', overflow: 'hidden' },
+  opcionCategoria: { paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f1f2f4' },
+  opcionCategoriaActiva: { backgroundColor: '#fff0f1' },
+  textoOpcionCategoria: { color: '#242630', fontSize: 13, fontWeight: '600' },
+  textoOpcionCategoriaActiva: { color: '#c90014' },
+  multilinea: { minHeight: 78, textAlignVertical: 'top' },
+  selectorImagen: { minHeight: 88, marginBottom: 14, padding: 10, flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderColor: '#eceef2', borderRadius: 14, backgroundColor: '#f8f8fa' },
+  vistaPreviaImagen: { width: 68, height: 68, borderRadius: 13 },
+  iconoImagenVacia: { width: 68, height: 68, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: '#fff0f1' },
+  detalleImagen: { flex: 1 },
+  nombreImagen: { color: '#242630', fontSize: 12, fontWeight: '700' },
+  ayudaImagen: { marginTop: 4, color: '#858995', fontSize: 10 },
+  botonImagen: { minHeight: 30, alignSelf: 'flex-start', marginTop: 7, paddingHorizontal: 9, flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: '#ffe0e3', borderRadius: 9, backgroundColor: '#fff' },
+  textoBotonImagen: { color: '#c90014', fontSize: 10, fontWeight: '800' },
+  boton: { minHeight: 46, marginTop: 2, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderRadius: 13, backgroundColor: '#ed0016' },
+  botonTexto: { color: '#fff', fontSize: 13, fontWeight: '800' },
   deshabilitado: { opacity: 0.6 },
-  producto: { marginBottom: 9, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 10, backgroundColor: '#fff' },
+  botonCancelarEdicion: { marginTop: 8, paddingVertical: 9, alignItems: 'center' },
+  textoCancelarEdicion: { color: '#c90014', fontSize: 12, fontWeight: '700' },
+  encabezadoLista: { marginBottom: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  encabezadoListaTexto: { flex: 1 },
+  subtituloLista: { color: '#242630', fontSize: 16, fontWeight: '800' },
+  cantidadLista: { marginTop: 3, color: '#858995', fontSize: 11 },
+  buscador: { height: 46, marginBottom: 13, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: '#eceef2', borderRadius: 13, backgroundColor: '#fff' },
+  inputBusqueda: { flex: 1, color: '#242630', fontSize: 13 },
+  producto: { minHeight: 84, marginBottom: 11, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderColor: '#eceef2', borderRadius: 17, backgroundColor: '#fff', elevation: 1, shadowColor: '#222', shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+  imagenProducto: { width: 60, height: 60, borderRadius: 15 },
+  imagenVacia: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff0f1' },
   detalle: { flex: 1 },
-  nombre: { color: '#29292e', fontWeight: '700' },
-  secundario: { marginTop: 4, color: '#777' },
-  enlace: { paddingVertical: 6, color: '#ed0016', fontWeight: '700' },
-  eliminar: { paddingVertical: 6, color: '#b00020', fontWeight: '700' },
-  headerActions: { alignItems: 'flex-end', gap: 4 },
+  nombre: { color: '#242630', fontSize: 13, fontWeight: '800' },
+  secundario: { marginTop: 4, color: '#858995', fontSize: 11 },
+  precio: { marginTop: 5, color: '#c90014', fontSize: 13, fontWeight: '900' },
+  accionesProducto: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  botonEditar: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: '#fff0f1' },
+  botonEliminar: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: '#fff1f0' },
+  vacio: { minHeight: 200, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 22, borderWidth: 1, borderColor: '#eceef2', borderRadius: 18, backgroundColor: '#fff' },
+  iconoVacio: { width: 66, height: 66, alignItems: 'center', justifyContent: 'center', borderRadius: 23, backgroundColor: '#ffe7e9' },
+  tituloVacio: { marginTop: 14, color: '#242630', fontSize: 15, fontWeight: '800', textAlign: 'center' },
+  textoVacio: { marginTop: 6, color: '#777b86', fontSize: 12, lineHeight: 18, textAlign: 'center' },
 });

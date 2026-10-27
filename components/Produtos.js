@@ -1,6 +1,11 @@
 import React from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
+function formatearPrecioCordoba(valor) {
+  const precioEntero = Math.trunc(Number(valor) || 0);
+  return `C$${precioEntero.toLocaleString('es-NI')}`;
+}
+
 // Representa un producto; las props contienen sus datos y su acción al pulsarlo.
 export default function Produtos({imagen,nombre,descripcion,precio,rating,onPress,}) {
   // Garantiza que la descripción sea un string antes de mostrarla en el texto del producto.
@@ -39,7 +44,7 @@ export default function Produtos({imagen,nombre,descripcion,precio,rating,onPres
         {/* Agrupa el precio en la parte inferior de la tarjeta. */}
         <View style={styles.footer}>
           {/* Muestra el precio en córdobas. */}
-          <Text style={styles.precio}>C${precio}</Text>
+          <Text style={styles.precio}>{formatearPrecioCordoba(precio)}</Text>
 
         </View>
       </View>

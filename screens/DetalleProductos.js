@@ -15,6 +15,11 @@ function normalizarTextoDetalle(valor) {
   return '';
 }
 
+function formatearPrecioCordoba(valor) {
+  const precio = Math.trunc(Number(valor) || 0);
+  return `C$${precio.toLocaleString('es-NI')}`;
+}
+
 export default function DetalleProductos({ route }) {
   // Extrae del parámetro de navegación los datos enviados desde el catálogo y los normaliza.
   const { nombre, precio, categoria, imagen, descripcion, rating } = route.params;
@@ -56,7 +61,7 @@ export default function DetalleProductos({ route }) {
 
         {/* Coloca el precio y la calificación en la misma fila. */}
         <View style={styles.fila}>
-          <Text style={styles.precio}>C${precio}</Text>
+          <Text style={styles.precio}>{formatearPrecioCordoba(precio)}</Text>
           <Text style={styles.rating}>★ {ratingTexto}</Text>
         </View>
 
@@ -94,7 +99,7 @@ export default function DetalleProductos({ route }) {
           </View>
         </View>
         {/* Muestra el precio multiplicado por la cantidad elegida. */}
-        <Text style={styles.subtotal}>Subtotal: C${subtotal}</Text>
+        <Text style={styles.subtotal}>Subtotal: {formatearPrecioCordoba(subtotal)}</Text>
 
         {/* Ejecuta la acción de agregar el producto al carrito. */}
         <Pressable

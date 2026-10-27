@@ -1,12 +1,36 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Alert,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { collection, doc, getDoc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
+const filtrosEstado = [
+  { valor: 'todos', etiqueta: 'Todos' },
+  { valor: 'pendiente', etiqueta: 'Pendientes' },
+  { valor: 'en-preparacion', etiqueta: 'Preparación' },
+  { valor: 'enviado', etiqueta: 'Enviados' },
+  { valor: 'recibido', etiqueta: 'Recibidos' },
+  { valor: 'cancelado', etiqueta: 'Cancelados' },
+];
+
+function normalizarEstadoPedido(estado) {
+  const valor = String(estado || 'pendiente').toLowerCase().replace(/_/g, '-');
+  return valor === 'preparacion' ? 'en-preparacion' : valor;
+}
+
 function obtenerEtiquetaEstado(estado) {
-  const valor = String(estado || 'pendiente').toLowerCase();
+  const valor = normalizarEstadoPedido(estado);
   if (valor === 'cancelado') return 'Pedido Cancelado';
-  if (valor === 'en-preparacion' || valor === 'en_preparacion' || valor === 'preparacion') return 'Recibido, En preparación';
+  if (valor === 'en-preparacion') return 'Recibido, En preparación';
   if (valor === 'enviado') return 'Enviado';
   if (valor === 'recibido') return 'Recibido';
   return 'Pendiente';
@@ -21,7 +45,7 @@ function formatearFecha(fecha) {
 }
 
 function formatearPrecio(valor) {
-  const precio = Number(valor);
+  const precio = Math.trunc(Number(valor));
   return `C$${Number.isFinite(precio) ? precio.toLocaleString('es-NI') : '0'}`;
 }
 
@@ -36,6 +60,8 @@ export default function AdminPedidos({ navigation }) {
   const [pedidos, setPedidos] = useState([]);
   const [nombresUsuarios, setNombresUsuarios] = useState({});
   const [pedidoExpandido, setPedidoExpandido] = useState(null);
+  const [filtroEstado, setFiltroEstado] = useState('todos');
+  const [busqueda, setBusqueda] = useState('');
   const usuariosConsultados = useRef(new Set());
 
   useEffect(() => {
@@ -106,23 +132,138 @@ export default function AdminPedidos({ navigation }) {
     }
   };
 
+  const pedidosFiltrados = pedidos.filter((pedido) => {
+    const estado = normalizarEstadoPedido(pedido.estado);
+    const nombreCliente = pedido.usuarioNombre
+      || nombresUsuarios[pedido.usuarioId]
+      || pedido.correo
+      || 'Cliente sin nombre';
+    const textoPedido = [
+      nombreCliente,
+      pedido.correo,
+      pedido.direccionEntrega?.direccion,
+      pedido.direccionEntrega?.telefono,
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    return (filtroEstado === 'todos' || estado === filtroEstado)
+      && textoPedido.includes(busqueda.trim().toLowerCase());
+  });
+
   return (
     <ScrollView contentContainerStyle={styles.contenedor}>
       <View style={styles.encabezado}>
-        <View>
-          <Text style={styles.titulo}>Pedidos del cliente</Text>
-          <Text style={styles.subtitulo}>Revisa todos los pedidos y cambia su estado.</Text>
+        <View style={styles.encabezadoTexto}>
+          <Text style={styles.etiquetaEncabezado}>FASTBITE · ADMINISTRACIÓN</Text>
+          <Text style={styles.titulo}>Pedidos</Text>
+          <Text style={styles.subtitulo}>Revisa y gestiona los pedidos de tus clientes.</Text>
         </View>
-        <Pressable onPress={() => navigation.navigate('AdminProductos')}>
+        <Pressable
+          style={styles.botonProductos}
+          onPress={() => navigation.navigate('AdminProductos')}
+          accessibilityRole="button"
+        >
+          <Ionicons name="fast-food-outline" size={16} color="#ed0016" />
           <Text style={styles.enlace}>Productos</Text>
         </Pressable>
       </View>
 
-      {pedidos.length === 0 ? (
-        <Text style={styles.vacio}>Todavía no hay pedidos realizados.</Text>
+      <View style={styles.resumen}>
+        <View style={styles.iconoResumen}>
+          <Ionicons name="receipt-outline" size={22} color="#ed0016" />
+        </View>
+        <View style={styles.textoResumen}>
+          <Text style={styles.totalResumen}>{pedidos.length}</Text>
+          <Text style={styles.detalleResumen}>pedidos registrados</Text>
+        </View>
+        <View style={styles.resumenPendientes}>
+          <Text style={styles.numeroPendientes}>
+            {pedidos.filter((pedido) => normalizarEstadoPedido(pedido.estado) === 'pendiente').length}
+          </Text>
+          <Text style={styles.etiquetaPendientes}>por atender</Text>
+        </View>
+      </View>
+
+      <View style={styles.buscador}>
+        <Ionicons name="search-outline" size={18} color="#858995" />
+        <TextInput
+          style={styles.inputBusqueda}
+          value={busqueda}
+          onChangeText={setBusqueda}
+          placeholder="Buscar cliente, correo o dirección"
+          placeholderTextColor="#999"
+          accessibilityLabel="Buscar pedidos por cliente, correo o dirección"
+          returnKeyType="search"
+        />
+        {busqueda.length > 0 && (
+          <Pressable
+            onPress={() => setBusqueda('')}
+            accessibilityRole="button"
+            accessibilityLabel="Limpiar búsqueda"
+          >
+            <Ionicons name="close-circle" size={18} color="#858995" />
+          </Pressable>
+        )}
+      </View>
+
+      <ScrollView
+        style={styles.carruselFiltros}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filtros}
+      >
+        {filtrosEstado.map((filtro) => {
+          const seleccionado = filtroEstado === filtro.valor;
+          const cantidad = filtro.valor === 'todos'
+            ? pedidos.length
+            : pedidos.filter((pedido) => normalizarEstadoPedido(pedido.estado) === filtro.valor).length;
+          return (
+            <Pressable
+              key={filtro.valor}
+              style={[styles.filtro, seleccionado && styles.filtroActivo]}
+              onPress={() => setFiltroEstado(filtro.valor)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: seleccionado }}
+            >
+              <Text
+                numberOfLines={1}
+                style={[styles.textoFiltro, seleccionado && styles.textoFiltroActivo]}
+              >
+                {filtro.etiqueta}
+              </Text>
+              <Text style={[styles.contadorFiltro, seleccionado && styles.contadorFiltroActivo]}>
+                {cantidad}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
+      <Text style={styles.tituloLista}>
+        {filtroEstado === 'todos' ? 'Pedidos recientes' : filtrosEstado.find((filtro) => filtro.valor === filtroEstado)?.etiqueta}
+        <Text style={styles.cantidadLista}> · {pedidosFiltrados.length}</Text>
+      </Text>
+
+      {pedidos.length === 0 || pedidosFiltrados.length === 0 ? (
+        <View style={styles.vacio}>
+          <View style={styles.iconoVacio}>
+            <Ionicons
+              name={pedidos.length === 0 ? 'receipt-outline' : 'search-outline'}
+              size={30}
+              color="#ed0016"
+            />
+          </View>
+          <Text style={styles.tituloVacio}>
+            {pedidos.length === 0 ? 'Todavía no hay pedidos' : 'No encontramos pedidos'}
+          </Text>
+          <Text style={styles.textoVacio}>
+            {pedidos.length === 0
+              ? 'Cuando un cliente realice una compra, aparecerá aquí.'
+              : 'Prueba con otro cliente o selecciona un estado distinto.'}
+          </Text>
+        </View>
       ) : (
-        pedidos.map((pedido) => {
-          const estadoActual = String(pedido.estado || 'pendiente').toLowerCase();
+        pedidosFiltrados.map((pedido) => {
+          const estadoActual = normalizarEstadoPedido(pedido.estado);
           const direccion = pedido.direccionEntrega || {};
           const productosPedido = Array.isArray(pedido.productos) ? pedido.productos : [];
           const expandido = pedidoExpandido === pedido.id;
@@ -141,9 +282,16 @@ export default function AdminPedidos({ navigation }) {
                 accessibilityLabel={`${nombreCliente}, ${expandido ? 'ocultar' : 'ver'} productos del pedido`}
               >
                 <View style={styles.encabezadoCliente}>
-                  <Text style={styles.pedidoNumero}>{nombreCliente}</Text>
-                  <Text style={styles.pedidoFecha}>{formatearFecha(pedido.fecha)}</Text>
-                  <Text style={styles.detalleToggle}>{expandido ? 'Ocultar productos' : 'Toca para ver productos'}</Text>
+                  <View style={styles.filaCliente}>
+                    <View style={styles.iconoCliente}>
+                      <Ionicons name="person-outline" size={16} color="#ed0016" />
+                    </View>
+                    <Text style={styles.pedidoNumero} numberOfLines={1}>{nombreCliente}</Text>
+                  </View>
+                  <View style={styles.filaFecha}>
+                    <Ionicons name="time-outline" size={13} color="#858995" />
+                    <Text style={styles.pedidoFecha}>{formatearFecha(pedido.fecha)}</Text>
+                  </View>
                 </View>
                 <View style={styles.encabezadoEstado}>
                   <View style={[
@@ -163,12 +311,33 @@ export default function AdminPedidos({ navigation }) {
                       {obtenerEtiquetaEstado(estadoActual)}
                     </Text>
                   </View>
+                  <Ionicons
+                    name={expandido ? 'chevron-up' : 'chevron-down'}
+                    size={17}
+                    color="#858995"
+                    style={styles.flechaPedido}
+                  />
                 </View>
               </Pressable>
 
-              {!!pedido.correo && <Text style={styles.pedidoDetalle}>Correo: {pedido.correo}</Text>}
-              {!!direccion.direccion && <Text style={styles.pedidoDetalle}>Dirección: {direccion.direccion}</Text>}
-              {!!direccion.telefono && <Text style={styles.pedidoDetalle}>Tel.: {direccion.telefono}</Text>}
+              {!!pedido.correo && (
+                <View style={styles.filaDetalle}>
+                  <Ionicons name="mail-outline" size={14} color="#858995" />
+                  <Text style={styles.pedidoDetalle}>{pedido.correo}</Text>
+                </View>
+              )}
+              {!!direccion.direccion && (
+                <View style={styles.filaDetalle}>
+                  <Ionicons name="location-outline" size={14} color="#858995" />
+                  <Text style={styles.pedidoDetalle}>{direccion.direccion}</Text>
+                </View>
+              )}
+              {!!direccion.telefono && (
+                <View style={styles.filaDetalle}>
+                  <Ionicons name="call-outline" size={14} color="#858995" />
+                  <Text style={styles.pedidoDetalle}>{direccion.telefono}</Text>
+                </View>
+              )}
 
               {expandido && productosPedido.length > 0 && (
                 <View style={styles.productosPedido}>
@@ -199,14 +368,27 @@ export default function AdminPedidos({ navigation }) {
                 <Text style={styles.pedidoDetalle}>Este pedido no tiene productos guardados.</Text>
               )}
 
-              <Text style={styles.totalPedido}>{formatearPrecio(pedido.total)}</Text>
+              <View style={styles.filaTotal}>
+                <Text style={styles.etiquetaTotal}>Total del pedido</Text>
+                <Text style={styles.totalPedido}>{formatearPrecio(pedido.total)}</Text>
+              </View>
 
               {estadoActual === 'pendiente' && (
                 <View style={styles.botonesContainer}>
-                  <Pressable style={styles.botonEstado} onPress={() => cambiarEstadoPedido(pedido, 'en-preparacion')}>
-                    <Text style={styles.botonTexto}>Recibido, En preparación</Text>
+                  <Pressable
+                    style={styles.botonEstado}
+                    onPress={() => cambiarEstadoPedido(pedido, 'en-preparacion')}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+                    <Text style={styles.botonTexto}>Aceptar pedido</Text>
                   </Pressable>
-                  <Pressable style={[styles.botonEstado, styles.botonCancelar]} onPress={() => cambiarEstadoPedido(pedido, 'cancelado')}>
+                  <Pressable
+                    style={[styles.botonEstado, styles.botonCancelar]}
+                    onPress={() => cambiarEstadoPedido(pedido, 'cancelado')}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="close-circle-outline" size={18} color="#ed0016" />
                     <Text style={[styles.botonTexto, styles.botonCancelarTexto]}>Cancelar Pedido</Text>
                   </Pressable>
                 </View>
@@ -214,17 +396,32 @@ export default function AdminPedidos({ navigation }) {
 
               {estadoActual === 'en-preparacion' && (
                 <View style={styles.botonesContainer}>
-                  <Pressable style={styles.botonEstado} onPress={() => cambiarEstadoPedido(pedido, 'enviado')}>
+                  <Pressable
+                    style={styles.botonEstado}
+                    onPress={() => cambiarEstadoPedido(pedido, 'enviado')}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="bicycle-outline" size={18} color="#fff" />
                     <Text style={styles.botonTexto}>Marcar como enviado</Text>
                   </Pressable>
-                  <Pressable style={[styles.botonEstado, styles.botonCancelar]} onPress={() => cambiarEstadoPedido(pedido, 'cancelado')}>
+                  <Pressable
+                    style={[styles.botonEstado, styles.botonCancelar]}
+                    onPress={() => cambiarEstadoPedido(pedido, 'cancelado')}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="close-circle-outline" size={18} color="#ed0016" />
                     <Text style={[styles.botonTexto, styles.botonCancelarTexto]}>Cancelar Pedido</Text>
                   </Pressable>
                 </View>
               )}
 
               {estadoActual === 'enviado' && (
-                <Pressable style={[styles.botonEstado, styles.botonCancelar]} onPress={() => cambiarEstadoPedido(pedido, 'cancelado')}>
+                <Pressable
+                  style={[styles.botonEstado, styles.botonCancelar]}
+                  onPress={() => cambiarEstadoPedido(pedido, 'cancelado')}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="close-circle-outline" size={18} color="#ed0016" />
                   <Text style={[styles.botonTexto, styles.botonCancelarTexto]}>Cancelar Pedido</Text>
                 </Pressable>
               )}
@@ -237,42 +434,74 @@ export default function AdminPedidos({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  contenedor: { flexGrow: 1, padding: 20, backgroundColor: '#f7f7f7' },
-  encabezado: { marginBottom: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  titulo: { color: '#29292e', fontSize: 23, fontWeight: '800' },
-  subtitulo: { marginTop: 4, color: '#666' },
-  enlace: { paddingVertical: 6, color: '#ed0016', fontWeight: '700' },
-  pedidoCard: { marginBottom: 12, padding: 12, borderRadius: 12, backgroundColor: '#fff' },
-  pedidoHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  contenedor: { flexGrow: 1, paddingHorizontal: 18, paddingTop: 48, paddingBottom: 24, backgroundColor: '#f5f6f8' },
+  encabezado: { marginBottom: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  encabezadoTexto: { flex: 1 },
+  etiquetaEncabezado: { marginBottom: 4, color: '#c90014', fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+  titulo: { color: '#242630', fontSize: 25, fontWeight: '800' },
+  subtitulo: { marginTop: 6, color: '#777b86', fontSize: 13, lineHeight: 18 },
+  botonProductos: { minHeight: 40, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: '#ffe0e3', borderRadius: 13, backgroundColor: '#fff' },
+  enlace: { color: '#ed0016', fontSize: 12, fontWeight: '800' },
+  resumen: { minHeight: 76, marginBottom: 14, padding: 14, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#eceef2', borderRadius: 18, backgroundColor: '#fff', elevation: 2, shadowColor: '#222', shadowOpacity: 0.04, shadowRadius: 7, shadowOffset: { width: 0, height: 2 } },
+  iconoResumen: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 15, backgroundColor: '#ffe7e9' },
+  textoResumen: { flex: 1, marginLeft: 11 },
+  totalResumen: { color: '#242630', fontSize: 19, fontWeight: '900' },
+  detalleResumen: { marginTop: 2, color: '#777b86', fontSize: 11 },
+  resumenPendientes: { alignItems: 'flex-end' },
+  numeroPendientes: { color: '#c90014', fontSize: 17, fontWeight: '900' },
+  etiquetaPendientes: { marginTop: 2, color: '#777b86', fontSize: 10 },
+  buscador: { height: 46, marginBottom: 12, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: '#eceef2', borderRadius: 13, backgroundColor: '#fff' },
+  inputBusqueda: { flex: 1, color: '#242630', fontSize: 13 },
+  carruselFiltros: { height: 48, flexGrow: 0, flexShrink: 0, marginBottom: 12 },
+  filtros: { alignItems: 'center', gap: 8, paddingRight: 18 },
+  filtro: { height: 36, flexShrink: 0, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, borderColor: '#eceef2', borderRadius: 12, backgroundColor: '#fff' },
+  filtroActivo: { borderColor: '#ed0016', backgroundColor: '#ed0016' },
+  textoFiltro: { color: '#666b75', fontSize: 11, fontWeight: '700' },
+  textoFiltroActivo: { color: '#fff' },
+  contadorFiltro: { minWidth: 18, paddingHorizontal: 5, paddingVertical: 2, overflow: 'hidden', borderRadius: 8, backgroundColor: '#f1f1f3', color: '#666b75', fontSize: 10, fontWeight: '800', textAlign: 'center' },
+  contadorFiltroActivo: { backgroundColor: '#fff', color: '#c90014' },
+  tituloLista: { marginBottom: 11, color: '#242630', fontSize: 15, fontWeight: '800' },
+  cantidadLista: { color: '#858995', fontSize: 13, fontWeight: '600' },
+  pedidoCard: { marginBottom: 13, padding: 15, borderWidth: 1, borderColor: '#eceef2', borderRadius: 18, backgroundColor: '#fff', elevation: 2, shadowColor: '#222', shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
+  pedidoHeader: { minHeight: 53, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 9 },
   encabezadoCliente: { flex: 1, marginRight: 8 },
-  encabezadoEstado: { alignItems: 'flex-end' },
-  pedidoNumero: { color: '#29292e', fontSize: 15, fontWeight: '800' },
-  pedidoFecha: { marginTop: 4, color: '#666', fontSize: 12 },
-  detalleToggle: { marginTop: 5, color: '#ed0016', fontSize: 12, fontWeight: '700' },
-  pedidoDetalle: { marginTop: 4, color: '#555', fontSize: 12 },
-  productosPedido: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#eee' },
+  filaCliente: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  iconoCliente: { width: 31, height: 31, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: '#fff0f1' },
+  encabezadoEstado: { alignItems: 'flex-end', gap: 6 },
+  flechaPedido: { marginRight: 4 },
+  pedidoNumero: { flex: 1, color: '#242630', fontSize: 14, fontWeight: '800' },
+  filaFecha: { marginTop: 5, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  pedidoFecha: { color: '#858995', fontSize: 10 },
+  filaDetalle: { marginTop: 5, flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
+  pedidoDetalle: { flex: 1, color: '#666b75', fontSize: 11, lineHeight: 16 },
+  productosPedido: { marginTop: 11, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#eceef2' },
   productoPedido: { marginVertical: 6, flexDirection: 'row', alignItems: 'center' },
-  imagenProducto: { width: 50, height: 50, borderRadius: 8 },
+  imagenProducto: { width: 52, height: 52, borderRadius: 13 },
   imagenVacia: { backgroundColor: '#f2f2f2' },
   detalleProducto: { flex: 1, marginHorizontal: 10 },
-  nombreProducto: { color: '#29292e', fontSize: 13, fontWeight: '700' },
-  textoProducto: { marginTop: 3, color: '#777', fontSize: 11 },
-  subtotalProducto: { color: '#29292e', fontSize: 12, fontWeight: '700' },
-  totalPedido: { marginTop: 10, color: '#ed0016', fontWeight: '800', fontSize: 16 },
-  estadoPedido: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, backgroundColor: '#fff1d6' },
-  estadoPedidoEnviado: { backgroundColor: '#e7f5ec' },
+  nombreProducto: { color: '#242630', fontSize: 13, fontWeight: '700' },
+  textoProducto: { marginTop: 3, color: '#858995', fontSize: 11 },
+  subtotalProducto: { color: '#242630', fontSize: 12, fontWeight: '700' },
+  filaTotal: { marginTop: 13, paddingTop: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#eceef2' },
+  etiquetaTotal: { color: '#242630', fontSize: 13, fontWeight: '800' },
+  totalPedido: { color: '#c90014', fontWeight: '900', fontSize: 18 },
+  estadoPedido: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 12, backgroundColor: '#fff1d6' },
+  estadoPedidoEnviado: { backgroundColor: '#e6f5ec' },
   estadoPedidoRecibido: { backgroundColor: '#e9edff' },
   estadoPedidoPreparacion: { backgroundColor: '#fff2d8' },
   estadoPedidoCancelado: { backgroundColor: '#fbe7e7' },
-  estadoTexto: { color: '#8c5a00', fontSize: 12, fontWeight: '700' },
+  estadoTexto: { color: '#8c5a00', fontSize: 10, fontWeight: '700', textAlign: 'center' },
   estadoTextoEnviado: { color: '#0b7d43' },
   estadoTextoRecibido: { color: '#2544b4' },
   estadoTextoPreparacion: { color: '#8a5d00' },
   estadoTextoCancelado: { color: '#b42318' },
   botonesContainer: { marginTop: 12, gap: 8 },
-  botonEstado: { paddingVertical: 11, alignItems: 'center', borderRadius: 10, backgroundColor: '#ed0016' },
-  botonCancelar: { backgroundColor: '#d92d20' },
-  botonTexto: { color: '#fff', fontWeight: '700' },
-  botonCancelarTexto: { color: '#fff' },
-  vacio: { color: '#666' },
+  botonEstado: { minHeight: 44, paddingVertical: 10, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderRadius: 13, backgroundColor: '#ed0016' },
+  botonCancelar: { borderWidth: 1, borderColor: '#f3c4c7', backgroundColor: '#fff5f5' },
+  botonTexto: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  botonCancelarTexto: { color: '#c90014' },
+  vacio: { minHeight: 230, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 22, borderWidth: 1, borderColor: '#eceef2', borderRadius: 18, backgroundColor: '#fff' },
+  iconoVacio: { width: 66, height: 66, alignItems: 'center', justifyContent: 'center', borderRadius: 23, backgroundColor: '#ffe7e9' },
+  tituloVacio: { marginTop: 15, color: '#242630', fontSize: 16, fontWeight: '800', textAlign: 'center' },
+  textoVacio: { marginTop: 6, color: '#777b86', fontSize: 12, lineHeight: 18, textAlign: 'center' },
 });
