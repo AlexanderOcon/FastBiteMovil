@@ -148,6 +148,7 @@ export default function AdminProductos({ navigation }) {
         categoria: formulario.categoria.trim(),
         precio,
         imagen: urlImagen,
+        image: urlImagen,
         descripcion: formulario.descripcion.trim(),
         rating: formulario.rating.trim() || '5.0',
       };

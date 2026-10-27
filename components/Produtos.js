@@ -16,9 +16,13 @@ export default function Produtos({imagen,nombre,descripcion,precio,rating,onPres
     // Ejecuta la función recibida cuando el usuario pulsa la tarjeta.
     <Pressable style={styles.card} onPress={onPress}>
       {/* Agrupa la imagen y la etiqueta de calificación. */}
-      <View>
+      <View style={styles.imagenContenedor}>
         {/* Carga la imagen remota usando la URL recibida por props. */}
-        <Image source={{ uri: imagen }} style={styles.imagen} />
+        <Image
+          source={{ uri: imagen }}
+          style={styles.imagen}
+          resizeMode="cover"
+        />
 
         {/* Coloca la calificación superpuesta en una esquina de la imagen. */}
         <View style={styles.rating}>
@@ -67,12 +71,16 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     shadowOffset: { width: 0, height: 2 },
   },
-  // Hace que la imagen ocupe el ancho de la tarjeta con altura fija.
+  // Hace que la imagen cubra todo el ancho del contenedor y recorte según el espacio disponible.
+  imagenContenedor: {
+    width: '100%',
+    height: 110,
+    overflow: 'hidden',
+    backgroundColor: '#f2f2f2',
+  },
   imagen: {
-    width: "90%",
-    height: 90,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: '100%',
+    height: '100%',
   },
   // Posiciona y da fondo a la etiqueta de calificación.
   rating: {

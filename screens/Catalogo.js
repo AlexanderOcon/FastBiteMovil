@@ -78,12 +78,14 @@ export default function Catalogo({ navigation }) {
       const producto = documento.data();
       const nombreCategoria =
         normalizarTexto(producto.categoria_id?.nombre || producto.categoria_id || producto.categoria || '');
+      const imagenNormalizada = normalizarTexto(producto.imagen || producto.image || '');
 
       return {
         id: documento.id,
         ...producto,
         categoria: nombreCategoria.trim(),
-        imagen: normalizarTexto(producto.image || producto.imagen || ''),
+        imagen: imagenNormalizada,
+        image: imagenNormalizada,
         descripcion: normalizarTexto(producto.descripcion || producto.categoria_id?.descripcion || ''),
         rating: normalizarTexto(producto.rating || producto.calificacion || '5.0'),
       };

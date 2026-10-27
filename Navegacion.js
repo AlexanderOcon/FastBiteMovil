@@ -16,6 +16,7 @@ import Carrito from './screens/Carrito';
 import Perfil from './screens/Perfil';
 import AdminProductos from './screens/AdminProductos';
 import AdminPedidos from './screens/AdminPedidos';
+import AdminScreen from './screens/AdminScreen';
 import Pedidos from './screens/Pedidos';
 
 const Tab = createBottomTabNavigator();
@@ -224,6 +225,14 @@ function MainNavigation() {
                 options={{
                   title: 'Productos',
                   tabBarIcon: ({ color, size }) => <Ionicons name="cube-outline" size={size} color={color} />,
+                }}
+              />
+              <Tab.Screen
+                name="AdminScreenTab"
+                component={AdminScreen}
+                options={{
+                  title: 'Reporte',
+                  tabBarIcon: ({ color, size }) => <Ionicons name="document-outline" size={size} color={color} />,
                 }}
               />
             </Tab.Navigator>
