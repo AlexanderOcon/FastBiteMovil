@@ -22,7 +22,21 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-font"
+      "expo-font",
+      "./plugins/withAndroidLocalProperties",
+      "./plugins/withAndroidCmakeConfig",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 24,
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "buildToolsVersion": "36.0.0",
+            "cmakeVersion": "4.1.0"
+          }
+        }
+      ]
     ]
   }
 }
