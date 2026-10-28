@@ -21,6 +21,64 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /ofertas/{offerId} {
+      allow read: if true;
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasAll([
+          'productoId', 'nombreProducto', 'titulo', 'descripcion',
+          'precioOriginal', 'precioOferta', 'imagen', 'activa', 'createdAt', 'updatedAt',
+          'productoIds', 'productos'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'productoId', 'nombreProducto', 'titulo', 'descripcion',
+          'precioOriginal', 'precioOferta', 'imagen', 'activa', 'createdAt', 'updatedAt',
+          'productoIds', 'productos'
+        ])
+        && request.resource.data.productoId is string
+        && request.resource.data.nombreProducto is string
+        && request.resource.data.titulo is string
+        && request.resource.data.descripcion is string
+        && request.resource.data.precioOriginal is number
+        && request.resource.data.precioOferta is number
+        && request.resource.data.imagen is string
+        && request.resource.data.activa is bool
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.productoIds is list
+        && request.resource.data.productoIds.size() > 0
+        && request.resource.data.productos is list
+        && request.resource.data.productos.size() > 0
+        && request.resource.data.productoIds.size() == request.resource.data.productos.size();
+      allow update: if isAdmin()
+        && request.resource.data.keys().hasAll([
+          'productoId', 'nombreProducto', 'titulo', 'descripcion',
+          'precioOriginal', 'precioOferta', 'imagen', 'activa', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'productoId', 'nombreProducto', 'titulo', 'descripcion',
+          'precioOriginal', 'precioOferta', 'imagen', 'activa', 'createdAt', 'updatedAt',
+          'productoIds', 'productos'
+        ])
+        && request.resource.data.productoId is string
+        && request.resource.data.nombreProducto is string
+        && request.resource.data.titulo is string
+        && request.resource.data.descripcion is string
+        && request.resource.data.precioOriginal is number
+        && request.resource.data.precioOferta is number
+        && request.resource.data.imagen is string
+        && request.resource.data.activa is bool
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp
+        && (!request.resource.data.keys().hasAny(['productoIds', 'productos'])
+          || (request.resource.data.keys().hasAll(['productoIds', 'productos'])
+            && request.resource.data.productoIds is list
+            && request.resource.data.productoIds.size() > 0
+            && request.resource.data.productos is list
+            && request.resource.data.productos.size() > 0
+            && request.resource.data.productoIds.size() == request.resource.data.productos.size()));
+      allow delete: if isAdmin();
+    }
+
     match /usuarios/{userId} {
       allow get: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId)

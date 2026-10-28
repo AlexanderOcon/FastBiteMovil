@@ -7,17 +7,19 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
-import { CarritoContext } from './context/CarritoContext';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import { auth, db } from './firebase/config';
-import Catalogo from './screens/Catalogo';
-import DetalleProducto from './screens/DetalleProductos';
-import Carrito from './screens/Carrito';
-import Perfil from './screens/Perfil';
-import AdminProductos from './screens/AdminProductos';
-import AdminPedidos from './screens/AdminPedidos';
-import AdminScreen from './screens/AdminScreen';
-import Pedidos from './screens/Pedidos';
+import { CarritoContext } from '../context/CarritoContext';
+import { AuthProvider, useAuth } from '../context/AuthContext';
+import { auth, db } from '../firebase/config';
+import Catalogo from '../screens/Catalogo';
+import DetalleProducto from '../screens/DetalleProductos';
+import Carrito from '../screens/Carrito';
+import Perfil from '../screens/Perfil';
+import AdminProductos from '../screens/AdminProductos';
+import AdminPedidos from '../screens/AdminPedidos';
+import AdminUsuarios from '../screens/AdminUsuarios';
+import AdminOfertas from '../screens/AdminOfertas';
+import AdminScreen from '../screens/AdminScreen';
+import Pedidos from '../screens/Pedidos';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -225,6 +227,22 @@ function MainNavigation() {
                 options={{
                   title: 'Productos',
                   tabBarIcon: ({ color, size }) => <Ionicons name="cube-outline" size={size} color={color} />,
+                }}
+              />
+              <Tab.Screen
+                name="AdminUsuariosTab"
+                component={AdminUsuarios}
+                options={{
+                  title: 'Equipo',
+                  tabBarIcon: ({ color, size }) => <Ionicons name="person-add-outline" size={size} color={color} />,
+                }}
+              />
+              <Tab.Screen
+                name="AdminOfertasTab"
+                component={AdminOfertas}
+                options={{
+                  title: 'Ofertas',
+                  tabBarIcon: ({ color, size }) => <Ionicons name="pricetag-outline" size={size} color={color} />,
                 }}
               />
               <Tab.Screen
