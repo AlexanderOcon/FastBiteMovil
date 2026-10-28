@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useContext } from 'react';
 import {
   Alert,
-  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -17,9 +16,8 @@ import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { CarritoContext } from '../context/CarritoContext';
 import { eliminarImagenProducto, subirImagenProducto } from '../services/supabaseStorage';
-
-// Define el estado inicial del formulario para agregar o editar un producto.
-const categoriasDisponibles = ['Alitas', 'Hamburguesas', 'Papas', 'Bebidas'];
+import ListaProductosAdmin from '../components/admin/ListaProductosAdmin';
+import FormularioProductoAdmin from '../components/admin/FormularioProductoAdmin';
 
 const formularioVacio = {
   nombre: '',
@@ -29,18 +27,6 @@ const formularioVacio = {
   descripcion: '',
   rating: '5.0',
 };
-
-function formatearPrecioCordoba(valor) {
-  const precio = Math.trunc(Number(valor));
-  return `C$${Number.isFinite(precio) ? precio.toLocaleString('es-NI') : '0'}`;
-}
-
-function formatearPrecioInput(valor) {
-  const numero = `${valor ?? ''}`.replace(/[^\d]/g, '');
-  if (!numero) return '';
-  const precio = Number(numero);
-  return `C$ ${Number.isFinite(precio) ? precio.toLocaleString('es-NI') : numero}`;
-}
 
 // Convierte un valor que venga como objeto, arreglo o número a un texto seguro para mostrarse en pantalla.
 function textoSeguro(valor) {
@@ -249,138 +235,19 @@ export default function AdminProductos({ navigation }) {
         </View>
       </View>
 
-      <View style={styles.formulario}>
-        <View style={styles.tituloFormularioFila}>
-          <View style={styles.iconoFormulario}>
-            <Ionicons name={idEditando ? 'create-outline' : 'add-outline'} size={19} color="#ed0016" />
-          </View>
-          <View style={styles.detalleTituloFormulario}>
-            <Text style={styles.subtitulo}>{idEditando ? 'Editar producto' : 'Agregar producto'}</Text>
-            <Text style={styles.ayudaFormulario}>Completa los datos para actualizar tu menú.</Text>
-          </View>
-        </View>
-
-        <Text style={styles.etiquetaCampo}>Nombre</Text>
-        <TextInput
-          style={styles.input}
-          value={formulario.nombre}
-          onChangeText={(value) => actualizarCampo('nombre', value)}
-          placeholder="Ej. Alitas BBQ"
-          placeholderTextColor="#999"
-          accessibilityLabel="Nombre del producto"
-        />
-        <Text style={styles.etiquetaCampo}>Categoría</Text>
-        <Pressable
-          style={styles.selectorCategoria}
-          onPress={() => setMostrarCategorias((actual) => !actual)}
-          accessibilityRole="button"
-          accessibilityLabel="Seleccionar categoría del producto"
-        >
-          <Text style={[styles.textoSelectorCategoria, !formulario.categoria && styles.textoSelectorCategoriaVacio]}>
-            {formulario.categoria || 'Selecciona una categoría'}
-          </Text>
-          <Ionicons name={mostrarCategorias ? 'chevron-up-outline' : 'chevron-down-outline'} size={18} color="#858995" />
-        </Pressable>
-
-        {mostrarCategorias && (
-          <View style={styles.menuCategorias}>
-            {categoriasDisponibles.map((categoria) => (
-              <Pressable
-                key={categoria}
-                style={[styles.opcionCategoria, formulario.categoria === categoria && styles.opcionCategoriaActiva]}
-                onPress={() => {
-                  actualizarCampo('categoria', categoria);
-                  setMostrarCategorias(false);
-                }}
-              >
-                <Text style={[styles.textoOpcionCategoria, formulario.categoria === categoria && styles.textoOpcionCategoriaActiva]}>{categoria}</Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
-
-        <Text style={styles.etiquetaCampo}>Precio en córdobas</Text>
-        <TextInput
-          style={styles.input}
-          value={formatearPrecioInput(formulario.precio)}
-          onChangeText={(value) => actualizarCampo('precio', `${value ?? ''}`.replace(/[^\d]/g, ''))}
-          placeholder="C$ 180"
-          placeholderTextColor="#999"
-          keyboardType="numeric"
-          accessibilityLabel="Precio en córdobas"
-        />
-        <Text style={styles.etiquetaCampo}>Imagen del producto</Text>
-        <View style={styles.selectorImagen}>
-          {(imagenSeleccionada?.uri || formulario.imagen) ? (
-            <Image
-              source={{ uri: imagenSeleccionada?.uri || formulario.imagen }}
-              style={styles.vistaPreviaImagen}
-            />
-          ) : (
-            <View style={styles.iconoImagenVacia}>
-              <Ionicons name="image-outline" size={25} color="#ed0016" />
-            </View>
-          )}
-          <View style={styles.detalleImagen}>
-            <Text style={styles.nombreImagen} numberOfLines={1}>
-              {imagenSeleccionada?.fileName || (imagenSeleccionada ? 'Imagen lista para subir' : formulario.imagen ? 'Imagen actual del producto' : 'Sin imagen seleccionada')}
-            </Text>
-            <Text style={styles.ayudaImagen}>JPG, PNG o WebP · máximo 8 MB</Text>
-            <Pressable
-              style={styles.botonImagen}
-              onPress={seleccionarImagen}
-              disabled={guardando}
-              accessibilityRole="button"
-              accessibilityLabel={formulario.imagen || imagenSeleccionada ? 'Cambiar imagen del producto' : 'Seleccionar imagen del producto'}
-            >
-              <Ionicons name="cloud-upload-outline" size={16} color="#c90014" />
-              <Text style={styles.textoBotonImagen}>
-                {imagenSeleccionada || formulario.imagen ? 'Cambiar imagen' : 'Seleccionar imagen'}
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-        <Text style={styles.etiquetaCampo}>Descripción</Text>
-        <TextInput
-          style={[styles.input, styles.multilinea]}
-          value={formulario.descripcion}
-          onChangeText={(value) => actualizarCampo('descripcion', value)}
-          placeholder="Describe brevemente el producto"
-          placeholderTextColor="#999"
-          multiline
-          accessibilityLabel="Descripción del producto"
-        />
-        <Text style={styles.etiquetaCampo}>Calificación (opcional)</Text>
-        <TextInput
-          style={styles.input}
-          value={formulario.rating}
-          onChangeText={(value) => actualizarCampo('rating', value)}
-          placeholder="5.0"
-          placeholderTextColor="#999"
-          keyboardType="decimal-pad"
-          accessibilityLabel="Calificación del producto"
-        />
-        <Pressable
-          style={[styles.boton, guardando && styles.deshabilitado]}
-          onPress={guardarProducto}
-          disabled={guardando}
-          accessibilityRole="button"
-        >
-          <Ionicons name={idEditando ? 'save-outline' : 'add-circle-outline'} size={19} color="#fff" />
-          <Text style={styles.botonTexto}>
-            {guardando ? 'Guardando...' : idEditando ? 'Guardar cambios' : 'Agregar producto'}
-          </Text>
-        </Pressable>
-        {idEditando && (
-          <Pressable
-            style={styles.botonCancelarEdicion}
-            onPress={limpiarFormulario}
-            accessibilityRole="button"
-          >
-            <Text style={styles.textoCancelarEdicion}>Cancelar edición</Text>
-          </Pressable>
-        )}
-      </View>
+      <FormularioProductoAdmin
+        formulario={formulario}
+        idEditando={idEditando}
+        guardando={guardando}
+        imagenSeleccionada={imagenSeleccionada}
+        mostrarCategorias={mostrarCategorias}
+        setMostrarCategorias={setMostrarCategorias}
+        actualizarCampo={actualizarCampo}
+        seleccionarImagen={seleccionarImagen}
+        guardarProducto={guardarProducto}
+        limpiarFormulario={limpiarFormulario}
+        styles={styles}
+      />
 
       <View style={styles.encabezadoLista}>
         <View style={styles.encabezadoListaTexto}>
@@ -411,135 +278,448 @@ export default function AdminProductos({ navigation }) {
         )}
       </View>
 
-      {productosFiltrados.length === 0 ? (
-        <View style={styles.vacio}>
-          <View style={styles.iconoVacio}>
-            <Ionicons
-              name={productos.length === 0 ? 'fast-food-outline' : 'search-outline'}
-              size={30}
-              color="#ed0016"
-            />
-          </View>
-          <Text style={styles.tituloVacio}>
-            {productos.length === 0 ? 'Aún no hay productos' : 'No encontramos productos'}
-          </Text>
-          <Text style={styles.textoVacio}>
-            {productos.length === 0
-              ? 'Agrega el primer producto para mostrarlo en el menú.'
-              : 'Prueba con otro nombre o categoría.'}
-          </Text>
-        </View>
-      ) : (
-        productosFiltrados.map((producto) => {
-        const nombre = textoSeguro(producto.nombre || '');
-        const categoria = textoSeguro(producto.categoria?.nombre || producto.categoria_id?.nombre || producto.categoria_id || producto.categoria || '');
-        const precio = textoSeguro(producto.precio ?? '');
-        const imagen = textoSeguro(producto.imagen || producto.image || '');
-
-        return (
-          <View key={producto.id} style={styles.producto}>
-            {imagen ? (
-              <Image source={{ uri: imagen }} style={styles.imagenProducto} />
-            ) : (
-              <View style={[styles.imagenProducto, styles.imagenVacia]}>
-                <Ionicons name="fast-food-outline" size={23} color="#ed0016" />
-              </View>
-            )}
-            <View style={styles.detalle}>
-              <Text style={styles.nombre} numberOfLines={1}>{nombre}</Text>
-              {!!categoria && <Text style={styles.secundario} numberOfLines={1}>{categoria}</Text>}
-              <Text style={styles.precio}>{formatearPrecioCordoba(producto.precio)}</Text>
-            </View>
-            <View style={styles.accionesProducto}>
-              <Pressable
-                style={styles.botonEditar}
-                onPress={() => cargarParaEditar(producto)}
-                accessibilityRole="button"
-                accessibilityLabel={`Editar ${nombre}`}
-              >
-                <Ionicons name="create-outline" size={17} color="#c90014" />
-              </Pressable>
-              <Pressable
-                style={styles.botonEliminar}
-                onPress={() => confirmarEliminacion(producto)}
-                accessibilityRole="button"
-                accessibilityLabel={`Eliminar ${nombre}`}
-              >
-                <Ionicons name="trash-outline" size={17} color="#b42318" />
-              </Pressable>
-            </View>
-          </View>
-        );
-        })
-      )}
+      <ListaProductosAdmin
+        productos={productosFiltrados}
+        totalProductos={productos.length}
+        textoSeguro={textoSeguro}
+        cargarParaEditar={cargarParaEditar}
+        confirmarEliminacion={confirmarEliminacion}
+        styles={styles}
+      />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  contenedor: { flexGrow: 1, paddingHorizontal: 18, paddingTop: 48, paddingBottom: 24, backgroundColor: '#f5f6f8' },
-  encabezado: { marginBottom: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  encabezadoTexto: { flex: 1 },
-  etiquetaEncabezado: { marginBottom: 4, color: '#c90014', fontSize: 10, fontWeight: '800', letterSpacing: 1 },
-  titulo: { color: '#242630', fontSize: 25, fontWeight: '800' },
-  descripcion: { marginTop: 6, color: '#777b86', fontSize: 13, lineHeight: 18 },
-  botonSalir: { minHeight: 40, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: '#ffe0e3', borderRadius: 13, backgroundColor: '#fff' },
-  textoSalir: { color: '#c90014', fontSize: 12, fontWeight: '800' },
-  resumen: { minHeight: 76, marginBottom: 16, padding: 14, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#eceef2', borderRadius: 18, backgroundColor: '#fff', elevation: 2, shadowColor: '#222', shadowOpacity: 0.04, shadowRadius: 7, shadowOffset: { width: 0, height: 2 } },
-  iconoResumen: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 15, backgroundColor: '#ffe7e9' },
-  detalleResumen: { flex: 1, marginLeft: 11 },
-  totalResumen: { color: '#242630', fontSize: 19, fontWeight: '900' },
-  textoResumen: { marginTop: 2, color: '#777b86', fontSize: 11 },
-  etiquetaMenu: { paddingHorizontal: 10, paddingVertical: 7, flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 11, backgroundColor: '#fff0f1' },
-  textoEtiquetaMenu: { color: '#c90014', fontSize: 11, fontWeight: '800' },
-  formulario: { marginBottom: 20, padding: 16, borderWidth: 1, borderColor: '#eceef2', borderRadius: 18, backgroundColor: '#fff', elevation: 2, shadowColor: '#222', shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
-  tituloFormularioFila: { marginBottom: 16, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  iconoFormulario: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: '#fff0f1' },
-  detalleTituloFormulario: { flex: 1 },
-  subtitulo: { color: '#242630', fontSize: 16, fontWeight: '800' },
-  ayudaFormulario: { marginTop: 3, color: '#858995', fontSize: 11 },
-  etiquetaCampo: { marginBottom: 6, color: '#50535e', fontSize: 11, fontWeight: '700' },
-  input: { minHeight: 44, marginBottom: 12, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#eceef2', borderRadius: 12, backgroundColor: '#f8f8fa', color: '#242630', fontSize: 13 },
-  selectorCategoria: { minHeight: 44, marginBottom: 12, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: '#eceef2', borderRadius: 12, backgroundColor: '#f8f8fa' },
-  textoSelectorCategoria: { color: '#242630', fontSize: 13, fontWeight: '600' },
-  textoSelectorCategoriaVacio: { color: '#999' },
-  menuCategorias: { marginTop: -4, marginBottom: 12, borderWidth: 1, borderColor: '#eceef2', borderRadius: 12, backgroundColor: '#fff', overflow: 'hidden' },
-  opcionCategoria: { paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f1f2f4' },
-  opcionCategoriaActiva: { backgroundColor: '#fff0f1' },
-  textoOpcionCategoria: { color: '#242630', fontSize: 13, fontWeight: '600' },
-  textoOpcionCategoriaActiva: { color: '#c90014' },
-  multilinea: { minHeight: 78, textAlignVertical: 'top' },
-  selectorImagen: { minHeight: 88, marginBottom: 14, padding: 10, flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderColor: '#eceef2', borderRadius: 14, backgroundColor: '#f8f8fa' },
-  vistaPreviaImagen: { width: 68, height: 68, borderRadius: 13 },
-  iconoImagenVacia: { width: 68, height: 68, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: '#fff0f1' },
-  detalleImagen: { flex: 1 },
-  nombreImagen: { color: '#242630', fontSize: 12, fontWeight: '700' },
-  ayudaImagen: { marginTop: 4, color: '#858995', fontSize: 10 },
-  botonImagen: { minHeight: 30, alignSelf: 'flex-start', marginTop: 7, paddingHorizontal: 9, flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: '#ffe0e3', borderRadius: 9, backgroundColor: '#fff' },
-  textoBotonImagen: { color: '#c90014', fontSize: 10, fontWeight: '800' },
-  boton: { minHeight: 46, marginTop: 2, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderRadius: 13, backgroundColor: '#ed0016' },
-  botonTexto: { color: '#fff', fontSize: 13, fontWeight: '800' },
-  deshabilitado: { opacity: 0.6 },
-  botonCancelarEdicion: { marginTop: 8, paddingVertical: 9, alignItems: 'center' },
-  textoCancelarEdicion: { color: '#c90014', fontSize: 12, fontWeight: '700' },
-  encabezadoLista: { marginBottom: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  encabezadoListaTexto: { flex: 1 },
-  subtituloLista: { color: '#242630', fontSize: 16, fontWeight: '800' },
-  cantidadLista: { marginTop: 3, color: '#858995', fontSize: 11 },
-  buscador: { height: 46, marginBottom: 13, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: '#eceef2', borderRadius: 13, backgroundColor: '#fff' },
-  inputBusqueda: { flex: 1, color: '#242630', fontSize: 13 },
-  producto: { minHeight: 84, marginBottom: 11, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderColor: '#eceef2', borderRadius: 17, backgroundColor: '#fff', elevation: 1, shadowColor: '#222', shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
-  imagenProducto: { width: 60, height: 60, borderRadius: 15 },
-  imagenVacia: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff0f1' },
-  detalle: { flex: 1 },
-  nombre: { color: '#242630', fontSize: 13, fontWeight: '800' },
-  secundario: { marginTop: 4, color: '#858995', fontSize: 11 },
-  precio: { marginTop: 5, color: '#c90014', fontSize: 13, fontWeight: '900' },
-  accionesProducto: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  botonEditar: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: '#fff0f1' },
-  botonEliminar: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: '#fff1f0' },
-  vacio: { minHeight: 200, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 22, borderWidth: 1, borderColor: '#eceef2', borderRadius: 18, backgroundColor: '#fff' },
-  iconoVacio: { width: 66, height: 66, alignItems: 'center', justifyContent: 'center', borderRadius: 23, backgroundColor: '#ffe7e9' },
-  tituloVacio: { marginTop: 14, color: '#242630', fontSize: 15, fontWeight: '800', textAlign: 'center' },
-  textoVacio: { marginTop: 6, color: '#777b86', fontSize: 12, lineHeight: 18, textAlign: 'center' },
+  contenedor: {
+    flexGrow: 1,
+    paddingHorizontal: 18,
+    paddingTop: 48,
+    paddingBottom: 24,
+    backgroundColor: '#f5f6f8',
+  },
+  encabezado: {
+    marginBottom: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  encabezadoTexto: {
+    flex: 1,
+  },
+  etiquetaEncabezado: {
+    marginBottom: 4,
+    color: '#c90014',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  titulo: {
+    color: '#242630',
+    fontSize: 25,
+    fontWeight: '800',
+  },
+  descripcion: {
+    marginTop: 6,
+    color: '#777b86',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  botonSalir: {
+    minHeight: 40,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderWidth: 1,
+    borderColor: '#ffe0e3',
+    borderRadius: 13,
+    backgroundColor: '#fff',
+  },
+  textoSalir: {
+    color: '#c90014',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  resumen: {
+    minHeight: 76,
+    marginBottom: 16,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#eceef2',
+    borderRadius: 18,
+    backgroundColor: '#fff',
+    elevation: 2,
+    shadowColor: '#222',
+    shadowOpacity: 0.04,
+    shadowRadius: 7,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  iconoResumen: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 15,
+    backgroundColor: '#ffe7e9',
+  },
+  detalleResumen: {
+    flex: 1,
+    marginLeft: 11,
+  },
+  totalResumen: {
+    color: '#242630',
+    fontSize: 19,
+    fontWeight: '900',
+  },
+  textoResumen: {
+    marginTop: 2,
+    color: '#777b86',
+    fontSize: 11,
+  },
+  etiquetaMenu: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: 11,
+    backgroundColor: '#fff0f1',
+  },
+  textoEtiquetaMenu: {
+    color: '#c90014',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  formulario: {
+    marginBottom: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#eceef2',
+    borderRadius: 18,
+    backgroundColor: '#fff',
+    elevation: 2,
+    shadowColor: '#222',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+  },
+  tituloFormularioFila: {
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  iconoFormulario: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 13,
+    backgroundColor: '#fff0f1',
+  },
+  detalleTituloFormulario: {
+    flex: 1,
+  },
+  subtitulo: {
+    color: '#242630',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  ayudaFormulario: {
+    marginTop: 3,
+    color: '#858995',
+    fontSize: 11,
+  },
+  etiquetaCampo: {
+    marginBottom: 6,
+    color: '#50535e',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  input: {
+    minHeight: 44,
+    marginBottom: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#eceef2',
+    borderRadius: 12,
+    backgroundColor: '#f8f8fa',
+    color: '#242630',
+    fontSize: 13,
+  },
+  selectorCategoria: {
+    minHeight: 44,
+    marginBottom: 12,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#eceef2',
+    borderRadius: 12,
+    backgroundColor: '#f8f8fa',
+  },
+  textoSelectorCategoria: {
+    color: '#242630',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  textoSelectorCategoriaVacio: {
+    color: '#999',
+  },
+  menuCategorias: {
+    marginTop: -4,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#eceef2',
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+  },
+  opcionCategoria: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f2f4',
+  },
+  opcionCategoriaActiva: {
+    backgroundColor: '#fff0f1',
+  },
+  textoOpcionCategoria: {
+    color: '#242630',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  textoOpcionCategoriaActiva: {
+    color: '#c90014',
+  },
+  multilinea: {
+    minHeight: 78,
+    textAlignVertical: 'top',
+  },
+  selectorImagen: {
+    minHeight: 88,
+    marginBottom: 14,
+    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    borderWidth: 1,
+    borderColor: '#eceef2',
+    borderRadius: 14,
+    backgroundColor: '#f8f8fa',
+  },
+  vistaPreviaImagen: {
+    width: 68,
+    height: 68,
+    borderRadius: 13,
+  },
+  iconoImagenVacia: {
+    width: 68,
+    height: 68,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 13,
+    backgroundColor: '#fff0f1',
+  },
+  detalleImagen: {
+    flex: 1,
+  },
+  nombreImagen: {
+    color: '#242630',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  ayudaImagen: {
+    marginTop: 4,
+    color: '#858995',
+    fontSize: 10,
+  },
+  botonImagen: {
+    minHeight: 30,
+    alignSelf: 'flex-start',
+    marginTop: 7,
+    paddingHorizontal: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderWidth: 1,
+    borderColor: '#ffe0e3',
+    borderRadius: 9,
+    backgroundColor: '#fff',
+  },
+  textoBotonImagen: {
+    color: '#c90014',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  boton: {
+    minHeight: 46,
+    marginTop: 2,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    borderRadius: 13,
+    backgroundColor: '#ed0016',
+  },
+  botonTexto: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  deshabilitado: {
+    opacity: 0.6,
+  },
+  botonCancelarEdicion: {
+    marginTop: 8,
+    paddingVertical: 9,
+    alignItems: 'center',
+  },
+  textoCancelarEdicion: {
+    color: '#c90014',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  encabezadoLista: {
+    marginBottom: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  encabezadoListaTexto: {
+    flex: 1,
+  },
+  subtituloLista: {
+    color: '#242630',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  cantidadLista: {
+    marginTop: 3,
+    color: '#858995',
+    fontSize: 11,
+  },
+  buscador: {
+    height: 46,
+    marginBottom: 13,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#eceef2',
+    borderRadius: 13,
+    backgroundColor: '#fff',
+  },
+  inputBusqueda: {
+    flex: 1,
+    color: '#242630',
+    fontSize: 13,
+  },
+  producto: {
+    minHeight: 84,
+    marginBottom: 11,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    borderWidth: 1,
+    borderColor: '#eceef2',
+    borderRadius: 17,
+    backgroundColor: '#fff',
+    elevation: 1,
+    shadowColor: '#222',
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  imagenProducto: {
+    width: 60,
+    height: 60,
+    borderRadius: 15,
+  },
+  imagenVacia: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff0f1',
+  },
+  detalle: {
+    flex: 1,
+  },
+  nombre: {
+    color: '#242630',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  secundario: {
+    marginTop: 4,
+    color: '#858995',
+    fontSize: 11,
+  },
+  precio: {
+    marginTop: 5,
+    color: '#c90014',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  accionesProducto: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  botonEditar: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 11,
+    backgroundColor: '#fff0f1',
+  },
+  botonEliminar: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 11,
+    backgroundColor: '#fff1f0',
+  },
+  vacio: {
+    minHeight: 200,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 22,
+    borderWidth: 1,
+    borderColor: '#eceef2',
+    borderRadius: 18,
+    backgroundColor: '#fff',
+  },
+  iconoVacio: {
+    width: 66,
+    height: 66,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 23,
+    backgroundColor: '#ffe7e9',
+  },
+  tituloVacio: {
+    marginTop: 14,
+    color: '#242630',
+    fontSize: 15,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  textoVacio: {
+    marginTop: 6,
+    color: '#777b86',
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
+  },
 });
