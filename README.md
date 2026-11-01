@@ -21,7 +21,6 @@ Aplicación móvil para explorar el catálogo de FastBite, administrar una cuent
 - Supabase Storage para las imágenes de productos administradas desde la aplicación.
 - AsyncStorage para persistencia de la sesión de Firebase en el dispositivo.
 
-> La versión declarada actualmente en `package.json` es Expo SDK 54 (`expo ~54.0.37`).
 
 ## Requisitos
 
@@ -57,23 +56,7 @@ Aplicación móvil para explorar el catálogo de FastBite, administrar una cuent
 
 3. En Firebase, habilita el método de autenticación por correo y contraseña y configura Firestore para el proyecto. Las reglas de acceso de Firestore están en `firestore.rules`.
 
-## Ejecución
 
-Inicia Expo:
-
-```sh
-npm start
-```
-
-También están disponibles estos comandos:
-
-```sh
-npm run android
-npm run ios
-npm run web
-```
-
-El comando de iOS requiere macOS y Xcode. Los comandos nativos requieren que el entorno de desarrollo correspondiente esté instalado.
 
 ## Estructura principal
 
