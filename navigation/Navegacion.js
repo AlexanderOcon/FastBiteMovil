@@ -210,23 +210,24 @@ function MainNavigation() {
         <NavigationContainer>
           {role === 'admin' ? (
             <Tab.Navigator
-              initialRouteName="AdminPedidosTab"
+              initialRouteName="AdminScreenTab"
               screenOptions={{ headerShown: false }}
             >
+              {/* Esta pestaña abre el resumen de ventas y pedidos del administrador. */}
+              <Tab.Screen
+                name="AdminScreenTab"
+                component={AdminScreen}
+                options={{
+                  title: 'Estadísticas',
+                  tabBarIcon: ({ color, size }) => <Ionicons name="bar-chart-outline" size={size} color={color} />,
+                }}
+              />
               <Tab.Screen
                 name="AdminPedidosTab"
                 component={AdminPedidos}
                 options={{
                   title: 'Pedidos',
                   tabBarIcon: ({ color, size }) => <Ionicons name="receipt-outline" size={size} color={color} />,
-                }}
-              />
-              <Tab.Screen
-                name="AdminProductosTab"
-                component={AdminProductos}
-                options={{
-                  title: 'Productos',
-                  tabBarIcon: ({ color, size }) => <Ionicons name="cube-outline" size={size} color={color} />,
                 }}
               />
               <Tab.Screen
@@ -246,11 +247,11 @@ function MainNavigation() {
                 }}
               />
               <Tab.Screen
-                name="AdminScreenTab"
-                component={AdminScreen}
+                name="AdminProductosTab"
+                component={AdminProductos}
                 options={{
-                  title: 'Reporte',
-                  tabBarIcon: ({ color, size }) => <Ionicons name="document-outline" size={size} color={color} />,
+                  title: 'Productos',
+                  tabBarIcon: ({ color, size }) => <Ionicons name="cube-outline" size={size} color={color} />,
                 }}
               />
             </Tab.Navigator>

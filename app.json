@@ -36,7 +36,8 @@
             "cmakeVersion": "4.1.0"
           }
         }
-      ]
+      ],
+      "expo-secure-store"
     ]
   }
 }
